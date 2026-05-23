@@ -1,0 +1,238 @@
+{
+  "papers": [
+    {
+      "id": "paper_001",
+      "openalex_id": "W4399114781",
+      "title": "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering",
+      "conference": "NeurIPS",
+      "year": 2024,
+      "topic": "AI agents",
+      "source_url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/5a7c947568c1b1328ccc5230172e1e7c-Abstract-Conference.html",
+      "abstract": "Language model agents are increasingly being used to automate complicated tasks in digital environments. We introduce SWE-agent, a system that facilitates LM agents to autonomously use computers to solve software engineering tasks via a custom agent-computer interface (ACI). SWE-agent achieves state-of-the-art performance on SWE-bench and HumanEvalFix.",
+      "authors": [
+        {
+          "name": "John Yang",
+          "affiliation": "Stanford University",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Carlos E. Jimenez",
+          "affiliation": "Princeton University",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Alexander Wettig",
+          "affiliation": "Princeton University",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Kilian Lieret",
+          "affiliation": "Princeton University",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Shunyu Yao",
+          "affiliation": "Princeton University",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Karthik Narasimhan",
+          "affiliation": "Princeton University",
+          "role": "Professor"
+        },
+        {
+          "name": "Ofir Press",
+          "affiliation": "Princeton University",
+          "role": "Assistant Professor"
+        }
+      ]
+    },
+    {
+      "id": "paper_002",
+      "openalex_id": "W4398859681",
+      "title": "AGILE: A Novel Reinforcement Learning Framework of LLM Agents",
+      "conference": "NeurIPS",
+      "year": 2024,
+      "topic": "AI agents",
+      "source_url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/097c514162ea7126d40671d23e12f51b-Abstract-Conference.html",
+      "abstract": "We introduce AGILE (AGent that Interacts and Learns from Environments), an RL framework for LLM agents that use memory, tools, expert consultation, and reflection. AGILE agents trained with PPO outperform GPT-4 agents on ProductQA, MedMCQA, and HotPotQA.",
+      "authors": [
+        {
+          "name": "Peiyuan Feng",
+          "affiliation": "ByteDance Research",
+          "role": "Research Scientist"
+        },
+        {
+          "name": "Yichen He",
+          "affiliation": "ByteDance Research",
+          "role": "Research Scientist"
+        },
+        {
+          "name": "Guanhua Huang",
+          "affiliation": "ByteDance Research",
+          "role": "Research Scientist"
+        },
+        {
+          "name": "Hang Li",
+          "affiliation": "ByteDance Research",
+          "role": "Research Director"
+        }
+      ]
+    },
+    {
+      "id": "paper_003",
+      "openalex_id": "W4377371656",
+      "title": "ToolkenGPT: Augmenting Frozen Language Models with Massive Tools via Tool Embeddings",
+      "conference": "NeurIPS",
+      "year": 2023,
+      "topic": "AI agents",
+      "source_url": "https://proceedings.neurips.cc/paper_files/paper/2023/hash/8fd1a81c882cd45f64958da6284f4a3f-Abstract-Conference.html",
+      "abstract": "We propose ToolkenGPT, which represents each external tool as a token with a learned embedding so frozen LLMs can call massive tool sets like generating words. ToolkenGPT improves numerical reasoning, knowledge QA, and embodied plan generation without fine-tuning the base LLM.",
+      "authors": [
+        {
+          "name": "Shibo Hao",
+          "affiliation": "UC San Diego",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Tianyang Liu",
+          "affiliation": "UC San Diego",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Zhen Wang",
+          "affiliation": "Mohamed bin Zayed University of Artificial Intelligence",
+          "role": "Researcher"
+        },
+        {
+          "name": "Zhiting Hu",
+          "affiliation": "UC San Diego",
+          "role": "Assistant Professor"
+        }
+      ]
+    },
+    {
+      "id": "paper_004",
+      "openalex_id": "W4403576246",
+      "title": "PIVOT-R: Primitive-Driven Waypoint-Aware World Model for Robotic Manipulation",
+      "conference": "NeurIPS",
+      "year": 2024,
+      "topic": "robotics",
+      "source_url": "https://arxiv.org/abs/2410.10394",
+      "abstract": "PIVOT-R is a primitive-driven waypoint-aware world model for language-guided robotic manipulation. It predicts task-relevant waypoints with a Waypoint-aware World Model and uses an asynchronous hierarchical executor to reduce computational redundancy while improving performance on SeaWave.",
+      "authors": [
+        {
+          "name": "Kaidong Zhang",
+          "affiliation": "Sun Yat-sen University",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Pengzhen Ren",
+          "affiliation": "Peng Cheng Laboratory",
+          "role": "Research Scientist"
+        },
+        {
+          "name": "Bingqian Lin",
+          "affiliation": "Sun Yat-sen University",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Xiaodan Liang",
+          "affiliation": "Sun Yat-sen University",
+          "role": "Professor"
+        }
+      ]
+    },
+    {
+      "id": "paper_005",
+      "openalex_id": "W4403810955",
+      "title": "Learning to Bridge the Gap: Efficient Novelty Recovery with Planning and Reinforcement Learning",
+      "conference": "NeurIPS",
+      "year": 2024,
+      "topic": "robotics",
+      "source_url": "https://openreview.net/forum?id=vVuVYIks28",
+      "abstract": "We propose learning a bridge policy via reinforcement learning to recover from environment novelties during deployment. A CallPlanner action hands control back to the planner once the bridge policy resolves the failure, enabling efficient adaptation across simulated robotic domains.",
+      "authors": [
+        {
+          "name": "Alicia Li",
+          "affiliation": "MIT CSAIL",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Nishanth Kumar",
+          "affiliation": "MIT CSAIL",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Tomás Lozano-Pérez",
+          "affiliation": "MIT CSAIL",
+          "role": "Professor"
+        },
+        {
+          "name": "Leslie Pack Kaelbling",
+          "affiliation": "MIT CSAIL",
+          "role": "Professor"
+        }
+      ]
+    },
+    {
+      "id": "paper_006",
+      "openalex_id": "W4403812582",
+      "title": "Generalized Protein Pocket Generation with Prior-Informed Flow Matching",
+      "conference": "NeurIPS",
+      "year": 2024,
+      "topic": "biotech AI",
+      "source_url": "https://openreview.net/forum?id=WyVTj77KEV",
+      "abstract": "PocketFlow is a flow-matching generative model for protein pocket design that incorporates protein-ligand interaction priors. It improves binding affinity and structural validity across small-molecule, peptide, and RNA ligand modalities for structure-based drug design.",
+      "authors": [
+        {
+          "name": "Zaixi Zhang",
+          "affiliation": "University of Science and Technology of China",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Marinka Zitnik",
+          "affiliation": "Harvard University",
+          "role": "Assistant Professor"
+        },
+        {
+          "name": "Qi Liu",
+          "affiliation": "University of Science and Technology of China",
+          "role": "Professor"
+        }
+      ]
+    },
+    {
+      "id": "paper_007",
+      "openalex_id": "W4405033893",
+      "title": "Multi-Scale Representation Learning for Protein Fitness Prediction",
+      "conference": "NeurIPS",
+      "year": 2024,
+      "topic": "biotech AI",
+      "source_url": "https://arxiv.org/abs/2412.01108",
+      "abstract": "We introduce S3F, a multi-scale protein representation learning framework integrating sequence, structure, and surface features for zero-shot fitness prediction. S3F achieves state-of-the-art results on the ProteinGym benchmark spanning more than 200 deep mutational scanning assays.",
+      "authors": [
+        {
+          "name": "Zuobai Zhang",
+          "affiliation": "Mila - Quebec AI Institute",
+          "role": "PhD Student"
+        },
+        {
+          "name": "Pascal Notin",
+          "affiliation": "Harvard Medical School",
+          "role": "Postdoc"
+        },
+        {
+          "name": "Payel Das",
+          "affiliation": "IBM Research",
+          "role": "Research Scientist"
+        },
+        {
+          "name": "Jian Tang",
+          "affiliation": "Mila - Quebec AI Institute",
+          "role": "Professor"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lab2startup"
+version = "0.1.0"
+description = "Agentic VC sourcing tool for academic founder signal monitoring"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110.0",
+  "uvicorn[standard]>=0.27.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.6.0",
+  "streamlit>=1.32.0",
+  "pandas>=2.0.0",
+  "pytest>=8.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "dashboard*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
