@@ -16,6 +16,7 @@ def get_report_result() -> ReportResult:
         papers_path=settings.papers_path,
         signals_path=settings.signals_path,
         openalex_config=settings.openalex_config,
+        openreview_config=settings.openreview_config,
         semantic_scholar_config=settings.semantic_scholar_config,
     )
 

@@ -98,6 +98,7 @@ def run_reports(
     *,
     papers: list | None = None,
     openalex_config=None,
+    openreview_config=None,
     semantic_scholar_config=None,
     min_score: int = 0,
     include_clusters: bool = True,
@@ -108,6 +109,7 @@ def run_reports(
         signals_path,
         papers=papers,
         openalex_config=openalex_config,
+        openreview_config=openreview_config,
         semantic_scholar_config=semantic_scholar_config,
     )
     reports = generate_reports(

@@ -164,10 +164,16 @@ def build_profiles(
     *,
     papers: list[Paper] | None = None,
     openalex_config=None,
+    openreview_config=None,
     semantic_scholar_config=None,
 ) -> ProfileResult:
     """Ingest papers and build coauthor clusters."""
-    ingestion = ingest_papers(path, papers=papers, openalex_config=openalex_config)
+    ingestion = ingest_papers(
+        path,
+        papers=papers,
+        openalex_config=openalex_config,
+        openreview_config=openreview_config,
+    )
     papers, researchers = enrich_dataset(
         ingestion.papers,
         ingestion.researchers,

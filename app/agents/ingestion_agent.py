@@ -129,11 +129,35 @@ def ingest_papers(
     *,
     papers: list[Paper] | None = None,
     openalex_config=None,
+    openreview_config=None,
 ) -> IngestionResult:
-    """Load papers from JSON or OpenAlex and extract researcher profiles."""
+    """Load papers from JSON or external sources and extract researcher profiles."""
     if papers is None:
-        papers = resolve_papers(path, openalex_config=openalex_config)
+        fetch_openreview = (
+            openreview_config is not None and openreview_config.fetch_as_source
+        )
+        papers = resolve_papers(
+            path,
+            openalex_config=openalex_config,
+            openreview_config=openreview_config if fetch_openreview else None,
+        )
+
+    if openreview_config is not None and openreview_config.enabled:
+        from app.integrations.openreview import (
+            enrich_papers_with_openreview,
+            sync_researchers_with_openreview,
+        )
+
+        if not openreview_config.fetch_as_source:
+            papers = enrich_papers_with_openreview(papers, openreview_config)
+
     researchers = extract_researchers(papers)
+
+    if openreview_config is not None and openreview_config.enabled:
+        from app.integrations.openreview import sync_researchers_with_openreview
+
+        researchers = sync_researchers_with_openreview(papers, researchers)
+
     return IngestionResult(papers=papers, researchers=researchers)
 
 

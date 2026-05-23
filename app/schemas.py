@@ -92,8 +92,13 @@ def resolve_papers(
     path: Path | str | None = None,
     *,
     openalex_config=None,
+    openreview_config=None,
 ) -> list[Paper]:
-    """Load papers from JSON or OpenAlex depending on configuration."""
+    """Load papers from JSON, OpenAlex, or OpenReview depending on configuration."""
+    if openreview_config is not None:
+        from app.integrations.openreview import fetch_papers_from_openreview
+
+        return fetch_papers_from_openreview(openreview_config)
     if openalex_config is not None:
         from app.integrations.openalex import fetch_papers_from_openalex
 

@@ -58,6 +58,7 @@ class PaperAuthor(BaseModel):
     affiliation: str
     role: str
     semantic_scholar_id: str | None = None
+    openreview_profile_id: str | None = None
 
 
 class Paper(BaseModel):
@@ -76,6 +77,8 @@ class Paper(BaseModel):
     citation_count: int | None = None
     influential_citation_count: int | None = None
     reference_count: int | None = None
+    openreview_id: str | None = None
+    openreview_url: str | None = None
 
 
 class Researcher(BaseModel):
@@ -93,6 +96,8 @@ class Researcher(BaseModel):
     citation_count: int | None = None
     h_index: int | None = None
     paper_count: int | None = None
+    openreview_profile_id: str | None = None
+    openreview_url: str | None = None
 
 
 class Signal(BaseModel):

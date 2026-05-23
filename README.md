@@ -6,7 +6,7 @@ An agentic VC sourcing tool that tracks researchers from top academic AI confere
 
 Start from academic conference data (papers and authors), extract researcher profiles and coauthor clusters, attach commercialization signals, score startup likelihood, and produce founder-monitoring reports.
 
-**Current status: Step 10b complete** — Semantic Scholar enrichment for citations and author metadata. OpenAlex ingestion and JSON fallback remain available.
+**Current status: Step 10c complete** — OpenReview fetch and affiliation enrichment. OpenAlex, Semantic Scholar, and JSON fallback remain available.
 
 ## MVP Scope
 
@@ -27,6 +27,7 @@ lab2startup/
     integrations/
       openalex.py            # OpenAlex fetch + normalize (Step 10a)
       semantic_scholar.py    # Semantic Scholar enrichment (Step 10b)
+      openreview.py          # OpenReview fetch + affiliations (Step 10c)
     main.py                  # FastAPI entrypoint (Step 8)
     database.py              # SQLite helpers (Step 2/8)
     models.py                # Data models (Step 2)
@@ -153,7 +154,51 @@ python -m app.integrations.semantic_scholar \
   --api-key your_key_here
 ```
 
-## How to Run / Test (Step 10b)
+## OpenReview integration (Step 10c)
+
+Fetch or enrich conference papers from [OpenReview](https://openreview.net/) with **author affiliations, roles, and profile links**. Supports NeurIPS, ICLR, and ICML via API v2.
+
+Two modes:
+
+1. **Fetch source** — load papers directly from OpenReview (`LAB2STARTUP_PAPER_SOURCE=openreview`)
+2. **Enrichment** — match your existing JSON/OpenAlex papers by title and backfill affiliations (default-friendly)
+
+When a researcher is linked to an OpenReview profile, identity confidence is raised to **HIGH**.
+
+### Enrich the mock dataset
+
+```bash
+export LAB2STARTUP_OPENREVIEW_ENABLED=true
+export LAB2STARTUP_OPENREVIEW_CONFERENCE=NeurIPS
+export LAB2STARTUP_OPENREVIEW_YEAR=2024
+
+uvicorn app.main:app --reload
+```
+
+### Fetch live papers from OpenReview
+
+```bash
+export LAB2STARTUP_PAPER_SOURCE=openreview
+export LAB2STARTUP_OPENREVIEW_CONFERENCE=NeurIPS
+export LAB2STARTUP_OPENREVIEW_YEAR=2024
+export LAB2STARTUP_OPENREVIEW_MAX_RESULTS=50
+
+python -m app.integrations.openreview --conference NeurIPS --year 2024 --max-results 10 \
+  --output app/data/openreview_papers.json
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LAB2STARTUP_PAPER_SOURCE` | `json` | Set to `openreview` to fetch papers from OpenReview |
+| `LAB2STARTUP_OPENREVIEW_ENABLED` | `false` | Enrich existing papers with OpenReview metadata |
+| `LAB2STARTUP_OPENREVIEW_CONFERENCE` | `NeurIPS` | Conference name (`NeurIPS`, `ICLR`, `ICML`) |
+| `LAB2STARTUP_OPENREVIEW_YEAR` | `2024` | Conference year |
+| `LAB2STARTUP_OPENREVIEW_MAX_RESULTS` | `50` / `1000` | Max papers (fetch vs enrich) |
+| `LAB2STARTUP_OPENREVIEW_ACCEPTED_ONLY` | `true` | Keep accepted submissions only |
+| `LAB2STARTUP_OPENREVIEW_FETCH_PROFILES` | `true` | Load author profile affiliations |
+| `LAB2STARTUP_OPENREVIEW_REQUEST_DELAY` | `0.5` | Delay between API requests (seconds) |
+
+## How to Run / Test (Step 10c)
 
 ### Dashboard (recommended)
 
@@ -271,7 +316,7 @@ The Streamlit dashboard lives in [`dashboard/streamlit_app.py`](dashboard/stream
 
 ## Next Step
 
-**Step 10c:** OpenReview integration for NeurIPS/ICLR paper lists and affiliations.
+**Step 10d:** GitHub integration for open-source and founder signal detection.
 
 ## Build Roadmap
 
@@ -287,5 +332,6 @@ The Streamlit dashboard lives in [`dashboard/streamlit_app.py`](dashboard/stream
 | 8 | FastAPI backend |
 | 9 | Streamlit dashboard |
 | 10a | OpenAlex paper ingestion |
-| 10b | Semantic Scholar enrichment *(current)* |
-| 10c+ | OpenReview, GitHub, web search |
+| 10b | Semantic Scholar enrichment |
+| 10c | OpenReview affiliations *(current)* |
+| 10d+ | GitHub, web search |

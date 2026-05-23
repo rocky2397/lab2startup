@@ -1,4 +1,4 @@
-"""Application configuration (Step 10a/10b)."""
+"""Application configuration (Step 10a–10c)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.integrations.openalex import OpenAlexFetchConfig
+from app.integrations.openreview import OpenReviewConfig
 from app.integrations.semantic_scholar import SemanticScholarConfig
 from app.schemas import DEFAULT_PAPERS_PATH, DEFAULT_SIGNALS_PATH
 
@@ -20,6 +21,7 @@ class AppSettings:
     papers_path: Path | None
     signals_path: Path | None
     openalex_config: OpenAlexFetchConfig | None
+    openreview_config: OpenReviewConfig | None
     semantic_scholar_config: SemanticScholarConfig
 
 
@@ -41,6 +43,34 @@ def _parse_bool(raw: str | None, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _build_openreview_config(*, fetch_as_source: bool) -> OpenReviewConfig | None:
+    if fetch_as_source:
+        return OpenReviewConfig(
+            enabled=True,
+            fetch_as_source=True,
+            conference=os.getenv("LAB2STARTUP_OPENREVIEW_CONFERENCE", "NeurIPS"),
+            year=int(os.getenv("LAB2STARTUP_OPENREVIEW_YEAR", "2024")),
+            max_results=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RESULTS", "50")),
+            accepted_only=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_ACCEPTED_ONLY"), True),
+            fetch_profiles=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_FETCH_PROFILES"), True),
+            request_delay_seconds=float(os.getenv("LAB2STARTUP_OPENREVIEW_REQUEST_DELAY", "0.5")),
+        )
+
+    if not _parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_ENABLED")):
+        return None
+
+    return OpenReviewConfig(
+        enabled=True,
+        fetch_as_source=False,
+        conference=os.getenv("LAB2STARTUP_OPENREVIEW_CONFERENCE", "NeurIPS"),
+        year=int(os.getenv("LAB2STARTUP_OPENREVIEW_YEAR", "2024")),
+        max_results=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RESULTS", "1000")),
+        accepted_only=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_ACCEPTED_ONLY"), True),
+        fetch_profiles=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_FETCH_PROFILES"), True),
+        request_delay_seconds=float(os.getenv("LAB2STARTUP_OPENREVIEW_REQUEST_DELAY", "0.5")),
+    )
+
+
 @lru_cache
 def get_settings() -> AppSettings:
     """Load settings from environment variables with JSON defaults."""
@@ -60,6 +90,8 @@ def get_settings() -> AppSettings:
             mailto=os.getenv("LAB2STARTUP_OPENALEX_MAILTO") or None,
         )
 
+    openreview_config = _build_openreview_config(fetch_as_source=paper_source == "openreview")
+
     semantic_scholar_config = SemanticScholarConfig(
         enabled=_parse_bool(os.getenv("LAB2STARTUP_SEMANTIC_SCHOLAR_ENABLED")),
         api_key=os.getenv("LAB2STARTUP_S2_API_KEY") or None,
@@ -75,6 +107,7 @@ def get_settings() -> AppSettings:
         papers_path=papers_path,
         signals_path=signals_path,
         openalex_config=openalex_config,
+        openreview_config=openreview_config,
         semantic_scholar_config=semantic_scholar_config,
     )
 

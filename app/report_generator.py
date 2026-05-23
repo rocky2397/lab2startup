@@ -126,9 +126,13 @@ def _build_summary(
             f"{researcher.citation_count or 0} total citations."
         )
 
+    openreview_phrase = ""
+    if researcher and researcher.openreview_url:
+        openreview_phrase = f" OpenReview profile: {researcher.openreview_url}."
+
     return (
         f"{subject} received a startup likelihood score of {score}/100. "
-        f"{paper_phrase} {signal_phrase}{scholar_phrase} "
+        f"{paper_phrase} {signal_phrase}{scholar_phrase}{openreview_phrase} "
         f"Recommended VC action: {recommendation}."
     )
 
