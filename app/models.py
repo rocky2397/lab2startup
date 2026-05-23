@@ -57,6 +57,7 @@ class PaperAuthor(BaseModel):
     name: str
     affiliation: str
     role: str
+    semantic_scholar_id: str | None = None
 
 
 class Paper(BaseModel):
@@ -71,6 +72,10 @@ class Paper(BaseModel):
     authors: list[PaperAuthor]
     source_url: str | None = None
     openalex_id: str | None = None
+    semantic_scholar_id: str | None = None
+    citation_count: int | None = None
+    influential_citation_count: int | None = None
+    reference_count: int | None = None
 
 
 class Researcher(BaseModel):
@@ -84,6 +89,10 @@ class Researcher(BaseModel):
     coauthors: list[str] = Field(default_factory=list)
     identity_confidence: IdentityConfidence = IdentityConfidence.MEDIUM
     identity_confidence_explanation: str = ""
+    semantic_scholar_id: str | None = None
+    citation_count: int | None = None
+    h_index: int | None = None
+    paper_count: int | None = None
 
 
 class Signal(BaseModel):

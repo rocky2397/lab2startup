@@ -119,9 +119,17 @@ def _build_summary(
         else "No public commercialization signals were detected."
     )
 
+    scholar_phrase = ""
+    if researcher and researcher.semantic_scholar_id:
+        scholar_phrase = (
+            f" Semantic Scholar profile: h-index {researcher.h_index or 'n/a'}, "
+            f"{researcher.citation_count or 0} total citations."
+        )
+
     return (
         f"{subject} received a startup likelihood score of {score}/100. "
-        f"{paper_phrase} {signal_phrase} Recommended VC action: {recommendation}."
+        f"{paper_phrase} {signal_phrase}{scholar_phrase} "
+        f"Recommended VC action: {recommendation}."
     )
 
 

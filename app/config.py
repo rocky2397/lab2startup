@@ -1,4 +1,4 @@
-"""Application configuration (Step 10a)."""
+"""Application configuration (Step 10a/10b)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.integrations.openalex import OpenAlexFetchConfig
+from app.integrations.semantic_scholar import SemanticScholarConfig
 from app.schemas import DEFAULT_PAPERS_PATH, DEFAULT_SIGNALS_PATH
 
 
@@ -19,6 +20,7 @@ class AppSettings:
     papers_path: Path | None
     signals_path: Path | None
     openalex_config: OpenAlexFetchConfig | None
+    semantic_scholar_config: SemanticScholarConfig
 
 
 def _parse_topic_keywords(raw: str | None) -> list[str]:
@@ -31,6 +33,12 @@ def _parse_work_ids(raw: str | None) -> list[str]:
     if not raw:
         return []
     return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _parse_bool(raw: str | None, default: bool = False) -> bool:
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @lru_cache
@@ -52,11 +60,22 @@ def get_settings() -> AppSettings:
             mailto=os.getenv("LAB2STARTUP_OPENALEX_MAILTO") or None,
         )
 
+    semantic_scholar_config = SemanticScholarConfig(
+        enabled=_parse_bool(os.getenv("LAB2STARTUP_SEMANTIC_SCHOLAR_ENABLED")),
+        api_key=os.getenv("LAB2STARTUP_S2_API_KEY") or None,
+        fetch_author_profiles=_parse_bool(
+            os.getenv("LAB2STARTUP_S2_FETCH_AUTHORS"),
+            default=True,
+        ),
+        request_delay_seconds=float(os.getenv("LAB2STARTUP_S2_REQUEST_DELAY", "1.1")),
+    )
+
     return AppSettings(
         paper_source=paper_source,
         papers_path=papers_path,
         signals_path=signals_path,
         openalex_config=openalex_config,
+        semantic_scholar_config=semantic_scholar_config,
     )
 
 

@@ -7,6 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.agents.enrichment_agent import enrich_dataset
 from app.agents.ingestion_agent import IngestionResult, ingest_papers
 from app.models import Cluster, Paper, Researcher
 
@@ -163,13 +164,19 @@ def build_profiles(
     *,
     papers: list[Paper] | None = None,
     openalex_config=None,
+    semantic_scholar_config=None,
 ) -> ProfileResult:
     """Ingest papers and build coauthor clusters."""
     ingestion = ingest_papers(path, papers=papers, openalex_config=openalex_config)
-    clusters = build_clusters(ingestion.researchers, ingestion.papers)
+    papers, researchers = enrich_dataset(
+        ingestion.papers,
+        ingestion.researchers,
+        semantic_scholar_config,
+    )
+    clusters = build_clusters(researchers, papers)
     return ProfileResult(
-        papers=ingestion.papers,
-        researchers=ingestion.researchers,
+        papers=papers,
+        researchers=researchers,
         clusters=clusters,
     )
 

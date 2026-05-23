@@ -71,6 +71,7 @@ def run_scoring(
     *,
     papers: list | None = None,
     openalex_config=None,
+    semantic_scholar_config=None,
 ) -> ScoringResult:
     """Run the full pipeline through scoring."""
     detection = detect_signals(
@@ -78,6 +79,7 @@ def run_scoring(
         signals_path,
         papers=papers,
         openalex_config=openalex_config,
+        semantic_scholar_config=semantic_scholar_config,
     )
     return compute_scores(detection)
 

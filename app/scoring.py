@@ -66,8 +66,19 @@ def _researcher_papers(researcher: Researcher, papers_by_id: dict[str, Paper]) -
     return [papers_by_id[paper_id] for paper_id in researcher.papers]
 
 
+def _citation_bonus(paper: Paper) -> int:
+    """Add a small bonus when Semantic Scholar citation data is available."""
+    if paper.citation_count is None:
+        return 0
+    if paper.citation_count >= 500:
+        return 2
+    if paper.citation_count >= 100:
+        return 1
+    return 0
+
+
 def score_research_quality(researcher: Researcher, papers_by_id: dict[str, Paper]) -> int:
-    """Score paper quality from conference tier and publication recency."""
+    """Score paper quality from conference tier, recency, and citations."""
     papers = _researcher_papers(researcher, papers_by_id)
     if not papers:
         return 0
@@ -76,7 +87,7 @@ def score_research_quality(researcher: Researcher, papers_by_id: dict[str, Paper
     for paper in papers:
         base = 12 if paper.conference == "NeurIPS" else 8
         year_bonus = 6 if paper.year >= 2024 else 4 if paper.year >= 2023 else 2
-        paper_scores.append(min(20, base + year_bonus))
+        paper_scores.append(min(20, base + year_bonus + _citation_bonus(paper)))
 
     return min(20, max(paper_scores))
 

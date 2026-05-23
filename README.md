@@ -6,7 +6,7 @@ An agentic VC sourcing tool that tracks researchers from top academic AI confere
 
 Start from academic conference data (papers and authors), extract researcher profiles and coauthor clusters, attach commercialization signals, score startup likelihood, and produce founder-monitoring reports.
 
-**Current status: Step 10a complete** — OpenAlex paper ingestion with JSON fallback. Streamlit dashboard and API unchanged; set env vars to fetch live papers.
+**Current status: Step 10b complete** — Semantic Scholar enrichment for citations and author metadata. OpenAlex ingestion and JSON fallback remain available.
 
 ## MVP Scope
 
@@ -26,6 +26,7 @@ lab2startup/
     config.py                # Env-based paper source settings (Step 10a)
     integrations/
       openalex.py            # OpenAlex fetch + normalize (Step 10a)
+      semantic_scholar.py    # Semantic Scholar enrichment (Step 10b)
     main.py                  # FastAPI entrypoint (Step 8)
     database.py              # SQLite helpers (Step 2/8)
     models.py                # Data models (Step 2)
@@ -117,7 +118,42 @@ uvicorn app.main:app --reload
 | `LAB2STARTUP_OPENALEX_MAX_RESULTS` | `50` | Max papers to fetch |
 | `LAB2STARTUP_OPENALEX_MAILTO` | — | Email for OpenAlex polite pool |
 
-## How to Run / Test (Step 10a)
+## Semantic Scholar enrichment (Step 10b)
+
+Enrich ingested papers and researchers with citation counts, influential citations, and author profiles from [Semantic Scholar](https://www.semanticscholar.org/). Disabled by default so the mock dataset and tests stay fast and offline-friendly.
+
+Papers are matched via arXiv/DOI URLs in `source_url`. Author profiles are matched by normalized name across coauthors on enriched papers.
+
+### Enable in the pipeline
+
+```bash
+export LAB2STARTUP_SEMANTIC_SCHOLAR_ENABLED=true
+export LAB2STARTUP_S2_API_KEY=your_key_here   # optional but recommended (1 req/s)
+export LAB2STARTUP_S2_FETCH_AUTHORS=true
+export LAB2STARTUP_S2_REQUEST_DELAY=1.1
+
+uvicorn app.main:app --reload
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LAB2STARTUP_SEMANTIC_SCHOLAR_ENABLED` | `false` | Enable Semantic Scholar enrichment |
+| `LAB2STARTUP_S2_API_KEY` | — | API key for higher rate limits |
+| `LAB2STARTUP_S2_FETCH_AUTHORS` | `true` | Fetch author h-index and citation totals |
+| `LAB2STARTUP_S2_REQUEST_DELAY` | `1.1` | Delay between API requests (seconds) |
+
+When enrichment is enabled, scoring adds a small citation bonus to **Research quality** and reports include Semantic Scholar profile stats in the summary.
+
+### CLI — enrich a papers JSON file
+
+```bash
+python -m app.integrations.semantic_scholar \
+  --input app/data/sample_papers.json \
+  --output app/data/enriched_papers.json \
+  --api-key your_key_here
+```
+
+## How to Run / Test (Step 10b)
 
 ### Dashboard (recommended)
 
@@ -235,7 +271,7 @@ The Streamlit dashboard lives in [`dashboard/streamlit_app.py`](dashboard/stream
 
 ## Next Step
 
-**Step 10b:** Semantic Scholar integration for citations and author metadata.
+**Step 10c:** OpenReview integration for NeurIPS/ICLR paper lists and affiliations.
 
 ## Build Roadmap
 
@@ -250,5 +286,6 @@ The Streamlit dashboard lives in [`dashboard/streamlit_app.py`](dashboard/stream
 | 7 | Report generation |
 | 8 | FastAPI backend |
 | 9 | Streamlit dashboard |
-| 10a | OpenAlex paper ingestion *(current)* |
-| 10b+ | Semantic Scholar, OpenReview, GitHub, web search |
+| 10a | OpenAlex paper ingestion |
+| 10b | Semantic Scholar enrichment *(current)* |
+| 10c+ | OpenReview, GitHub, web search |

@@ -104,12 +104,14 @@ def detect_signals(
     *,
     papers: list | None = None,
     openalex_config=None,
+    semantic_scholar_config=None,
 ) -> SignalDetectionResult:
     """Load profiles and attach mock commercialization signals."""
     profile_result = build_profiles(
         papers_path,
         papers=papers,
         openalex_config=openalex_config,
+        semantic_scholar_config=semantic_scholar_config,
     )
     raw_signals = load_signals(signals_path)
     resolved_signals, unmatched = attach_signals(
