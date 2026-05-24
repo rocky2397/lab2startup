@@ -46,6 +46,14 @@ def _resolve_fund(
     return settings.fund_profile
 
 
+def _redact_integration_config(config: object) -> dict[str, object]:
+    """Serialize integration config for SQLite without persisting secrets."""
+    data = asdict(config)  # type: ignore[arg-type]
+    if data.get("api_key"):
+        data["api_key"] = "***redacted***"
+    return data
+
+
 def build_run_configs(
     *,
     conference: str,
@@ -74,19 +82,17 @@ def build_run_configs(
             mailto=settings.openalex_config.mailto if settings.openalex_config else None,
         )
     elif paper_source == "openreview":
+        base_or = settings.openreview_config
         openreview_config = OpenReviewConfig(
             enabled=True,
             fetch_as_source=True,
             conference=conference,
             year=year,
-            max_results=settings.openreview_config.max_results
-            if settings.openreview_config
-            else 50,
+            max_results=base_or.max_results if base_or else 50,
             accepted_only=True,
-            fetch_profiles=True,
-            request_delay_seconds=settings.openreview_config.request_delay_seconds
-            if settings.openreview_config
-            else 0.5,
+            fetch_profiles=base_or.fetch_profiles if base_or else True,
+            request_delay_seconds=base_or.request_delay_seconds if base_or else 1.0,
+            max_retries=base_or.max_retries if base_or else 6,
         )
     elif paper_source == "json":
         openreview_config = settings.openreview_config
@@ -153,19 +159,17 @@ def _enrich_openreview_config(
     if configs["paper_source"] != "openreview":
         return configs["openreview_config"]  # type: ignore[return-value]
 
+    base_or = settings.openreview_config
     return OpenReviewConfig(
         enabled=True,
         fetch_as_source=False,
         conference=conference,
         year=year,
-        max_results=settings.openreview_config.max_results
-        if settings.openreview_config
-        else 50,
+        max_results=base_or.max_results if base_or else 50,
         accepted_only=True,
-        fetch_profiles=True,
-        request_delay_seconds=settings.openreview_config.request_delay_seconds
-        if settings.openreview_config
-        else 0.5,
+        fetch_profiles=base_or.fetch_profiles if base_or else True,
+        request_delay_seconds=base_or.request_delay_seconds if base_or else 1.0,
+        max_retries=base_or.max_retries if base_or else 6,
     )
 
 
@@ -214,9 +218,11 @@ def execute_pipeline_run(
         "topics": topics or [],
         "mode": settings.mode,
         "integrations": {
-            "semantic_scholar": asdict(configs["semantic_scholar_config"]),  # type: ignore[arg-type]
-            "github": asdict(configs["github_config"]),  # type: ignore[arg-type]
-            "perplexity": asdict(configs["perplexity_config"]),  # type: ignore[arg-type]
+            "semantic_scholar": _redact_integration_config(
+                configs["semantic_scholar_config"]  # type: ignore[arg-type]
+            ),
+            "github": _redact_integration_config(configs["github_config"]),  # type: ignore[arg-type]
+            "perplexity": _redact_integration_config(configs["perplexity_config"]),  # type: ignore[arg-type]
         },
     }
 

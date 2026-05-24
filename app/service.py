@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from app.agents.report_agent import ReportResult, run_reports
+from app.agents.scoring_agent import ScoringResult
+from app.agents.signal_agent import SignalDetectionResult
 from app.config import get_settings
 from app.pipeline_cache import (
     clear_pipeline_disk_cache,
@@ -14,6 +16,14 @@ from app.run_service import get_stored_report_result
 _memory_result: ReportResult | None = None
 _memory_fingerprint: str | None = None
 _active_run_id: str | None = None
+
+
+def empty_report_result() -> ReportResult:
+    """Return an empty pipeline result when no stored run exists yet."""
+    return ReportResult(
+        scoring=ScoringResult(detection=SignalDetectionResult()),
+        reports=[],
+    )
 
 
 def _fingerprint() -> str:
@@ -55,8 +65,13 @@ def get_report_result(*, force_refresh: bool = False, run_id: str | None = None)
                 _memory_result = stored
                 _memory_fingerprint = fingerprint
                 return stored
+            if settings.is_production:
+                empty = empty_report_result()
+                _memory_result = empty
+                _memory_fingerprint = fingerprint
+                return empty
 
-        if settings.pipeline_cache_enabled and not settings.is_production:
+        if settings.pipeline_cache_enabled:
             cached = load_cached_report_result(
                 settings,
                 cache_dir=settings.pipeline_cache_dir,
@@ -66,6 +81,12 @@ def get_report_result(*, force_refresh: bool = False, run_id: str | None = None)
                 _memory_result = cached
                 _memory_fingerprint = fingerprint
                 return cached
+
+    if settings.is_production:
+        empty = empty_report_result()
+        _memory_result = empty
+        _memory_fingerprint = fingerprint
+        return empty
 
     signals_path = settings.signals_path if settings.use_mock_signals else None
     result = run_reports(
@@ -80,7 +101,7 @@ def get_report_result(*, force_refresh: bool = False, run_id: str | None = None)
         topic_scores=settings.topic_scores,
     )
 
-    if settings.pipeline_cache_enabled and not settings.is_production:
+    if settings.pipeline_cache_enabled:
         save_cached_report_result(
             settings,
             result,

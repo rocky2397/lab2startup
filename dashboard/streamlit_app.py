@@ -28,6 +28,12 @@ from dashboard.filters import (
     recommendation_options,
     researcher_id_from_report_id,
 )
+from dashboard.scoring_ui import (
+    render_candidate_score_breakdown_expander,
+    render_scoring_methodology_expander,
+    render_signal_sources_expander,
+    score_breakdown_dataframe,
+)
 
 
 @st.cache_data(show_spinner="Loading Lab2Startup pipeline...")
@@ -40,48 +46,26 @@ def load_pipeline(force_refresh: bool = False, run_id: str | None = None):
 
 def _active_integrations(settings) -> list[str]:
     active: list[str] = []
+    if settings.perplexity_config.enabled:
+        active.append("Perplexity (primary)")
     if settings.openreview_config is not None and settings.openreview_config.enabled:
         active.append("OpenReview")
     if settings.semantic_scholar_config.enabled:
         active.append("Semantic Scholar")
     if settings.github_config.enabled:
-        active.append("GitHub")
-    if settings.perplexity_config.enabled:
-        active.append("Perplexity")
+        active.append("GitHub (supplement)")
+    if settings.use_mock_signals:
+        active.append("Mock signals (dev)")
     if settings.paper_source != "json":
         active.append(f"Papers: {settings.paper_source}")
-    return active or ["Mock JSON only"]
+    elif not settings.is_production:
+        active.append("Papers: mock JSON")
+    return active or ["No signal sources enabled"]
 
 
 def _run_label(run) -> str:
     created = run.created_at[:10] if run.created_at else "unknown"
     return f"{run.conference} {run.year} — {created} ({run.status.value})"
-
-
-def score_breakdown_dataframe(report) -> pd.DataFrame:
-    """Convert a score breakdown into a chart-friendly dataframe."""
-    breakdown = report.score_breakdown
-    return pd.DataFrame(
-        {
-            "Component": [
-                "Research quality",
-                "Applied relevance",
-                "Team continuity",
-                "Project momentum",
-                "Signal strength",
-                "Recency",
-            ],
-            "Score": [
-                breakdown.research_quality,
-                breakdown.applied_relevance,
-                breakdown.team_continuity,
-                breakdown.open_source_or_project_momentum,
-                breakdown.commercialization_signal_strength,
-                breakdown.recency,
-            ],
-            "Max": [20, 20, 15, 15, 20, 10],
-        }
-    )
 
 
 def main() -> None:
@@ -149,20 +133,34 @@ def main() -> None:
             source_options = list(fund_entry.sources) if fund_entry else ["openreview", "openalex", "json"]
             paper_source = st.selectbox("Paper source", source_options, index=0)
             if st.button("Run pipeline & save", type="primary"):
-                with st.spinner("Running pipeline — this may take several minutes..."):
-                    run, _ = execute_pipeline_run(
-                        conference=run_conference,
-                        year=int(run_year),
-                        paper_source=paper_source,
-                        fund_profile=fund.id if fund else settings.fund_id,
-                        settings=settings,
+                try:
+                    with st.spinner("Running pipeline — this may take several minutes..."):
+                        run, _ = execute_pipeline_run(
+                            conference=run_conference,
+                            year=int(run_year),
+                            paper_source=paper_source,
+                            fund_profile=fund.id if fund else settings.fund_id,
+                            settings=settings,
+                        )
+                        st.session_state.selected_run_id = run.id
+                    load_pipeline.clear()
+                    clear_cache()
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Pipeline run failed: {exc}")
+                    st.info(
+                        "OpenReview often returns **429 Too Many Requests** when fetching many "
+                        "author profiles. Wait a few minutes and retry, or set a slower delay:\n\n"
+                        "`LAB2STARTUP_OPENREVIEW_REQUEST_DELAY=2.0`\n\n"
+                        "To skip affiliation lookups (faster, still runs Perplexity):\n\n"
+                        "`LAB2STARTUP_OPENREVIEW_FETCH_PROFILES=false`"
                     )
-                    st.session_state.selected_run_id = run.id
-                load_pipeline.clear()
-                clear_cache()
-                st.rerun()
         else:
-            if st.button("Refresh live data", help="Re-run all enabled integrations"):
+            st.caption(
+                "Development mode: refresh runs the live pipeline against mock JSON papers "
+                "unless `LAB2STARTUP_PAPER_SOURCE=openreview`. Perplexity is the primary signal source."
+            )
+            if st.button("Refresh live data", help="Re-run enabled integrations (Perplexity-first)"):
                 clear_cache()
                 load_pipeline.clear()
                 st.session_state.do_refresh = True
@@ -180,6 +178,17 @@ def main() -> None:
     )
     detection = result.scoring.detection
     papers = detection.papers
+
+    if not papers and settings.is_production and not complete_runs:
+        st.info(
+            "No pipeline data yet. Use **Run pipeline & save** in the sidebar, or from the CLI:\n\n"
+            f"`python run_pipeline.py --conference {default_conference} --year 2024`"
+        )
+        return
+
+    if not papers and not result.reports:
+        st.warning("No papers or candidates in the current dataset.")
+        return
 
     conferences = sorted({paper.conference for paper in papers})
     years = sorted({paper.year for paper in papers}, reverse=True)
@@ -285,27 +294,23 @@ def main() -> None:
         report for report in filtered_reports if report.id == selected_report_id
     )
 
-    left, right = st.columns([1, 1])
+    detail_col1, detail_col2, detail_col3 = st.columns(3)
+    detail_col1.metric("Score", selected_report.startup_likelihood_score)
+    detail_col2.metric(
+        "Priority",
+        selected_report.priority_band.value.replace("_", " ").title(),
+    )
+    detail_col3.metric(
+        "Recommendation",
+        RECOMMENDATION_LABELS[selected_report.recommendation],
+    )
 
-    with left:
-        st.subheader("Score breakdown")
-        breakdown_df = score_breakdown_dataframe(selected_report)
-        st.bar_chart(breakdown_df.set_index("Component")["Score"])
-        st.dataframe(breakdown_df, width="stretch", hide_index=True)
-
-    with right:
-        st.subheader("Detected signals")
-        if selected_report.signals:
-            for signal in selected_report.signals:
-                st.markdown(
-                    f"**{signal.signal_type.value.replace('_', ' ').title()}** "
-                    f"({signal.evidence_strength.value})  \n"
-                    f"{signal.description}  \n"
-                    f"[Source]({signal.source_url})"
-                )
-        else:
-            st.info("No signals attached to this candidate.")
-
+    breakdown_df = score_breakdown_dataframe(selected_report)
+    preview_col1, preview_col2 = st.columns([1, 1])
+    with preview_col1:
+        st.caption("Score components (expand below for full methodology)")
+        st.bar_chart(breakdown_df.set_index("Component")["Score"], height=220)
+    with preview_col2:
         if view_mode == "Researchers":
             researcher_id = researcher_id_from_report_id(selected_report.id)
             if researcher_id:
@@ -316,9 +321,23 @@ def main() -> None:
                 st.write(f"Affiliation: {researcher.affiliation}")
                 st.write(f"Role: {researcher.role}")
                 st.write(f"Identity confidence: {researcher.identity_confidence.value}")
+                st.write(f"Signals attached: {len(selected_report.signals)}")
+        else:
+            st.markdown("**Cluster view**")
+            st.write(f"Signals attached: {len(selected_report.signals)}")
+            st.caption("Expand **Sources & detected signals** below for links.")
 
     st.subheader("Generated report")
     st.markdown(render_report_markdown(selected_report))
+
+    st.divider()
+    st.subheader("Details")
+    render_scoring_methodology_expander(
+        fund=fund,
+        topic_scores=settings.topic_scores,
+    )
+    render_candidate_score_breakdown_expander(selected_report)
+    render_signal_sources_expander(selected_report.signals)
 
 
 if __name__ == "__main__":

@@ -94,7 +94,8 @@ def _build_openreview_config(*, fetch_as_source: bool) -> OpenReviewConfig | Non
             max_results=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RESULTS", "50")),
             accepted_only=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_ACCEPTED_ONLY"), True),
             fetch_profiles=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_FETCH_PROFILES"), True),
-            request_delay_seconds=float(os.getenv("LAB2STARTUP_OPENREVIEW_REQUEST_DELAY", "0.5")),
+            request_delay_seconds=float(os.getenv("LAB2STARTUP_OPENREVIEW_REQUEST_DELAY", "1.0")),
+            max_retries=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RETRIES", "6")),
         )
 
     if not _parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_ENABLED")):
@@ -108,7 +109,8 @@ def _build_openreview_config(*, fetch_as_source: bool) -> OpenReviewConfig | Non
         max_results=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RESULTS", "1000")),
         accepted_only=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_ACCEPTED_ONLY"), True),
         fetch_profiles=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_FETCH_PROFILES"), True),
-        request_delay_seconds=float(os.getenv("LAB2STARTUP_OPENREVIEW_REQUEST_DELAY", "0.5")),
+        request_delay_seconds=float(os.getenv("LAB2STARTUP_OPENREVIEW_REQUEST_DELAY", "1.0")),
+        max_retries=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RETRIES", "6")),
     )
 
 
@@ -126,14 +128,14 @@ def _parse_identity_confidence(raw: str | None) -> IdentityConfidence:
 def get_settings() -> AppSettings:
     """Load settings from environment variables with JSON defaults."""
     _load_dotenv()
-    mode = os.getenv("LAB2STARTUP_MODE", "development").strip().lower()
+    mode = os.getenv("LAB2STARTUP_MODE", "production").strip().lower()
     default_paper_source = "openreview" if mode == "production" else "json"
     paper_source = os.getenv("LAB2STARTUP_PAPER_SOURCE", default_paper_source).strip().lower()
     papers_path = Path(os.getenv("LAB2STARTUP_PAPERS_PATH", str(DEFAULT_PAPERS_PATH)))
     signals_path = Path(os.getenv("LAB2STARTUP_SIGNALS_PATH", str(DEFAULT_SIGNALS_PATH)))
     use_mock_signals = _parse_bool(
         os.getenv("LAB2STARTUP_USE_MOCK_SIGNALS"),
-        default=(mode != "production"),
+        default=False,
     )
     db_path = Path(os.getenv("LAB2STARTUP_DB_PATH", str(DEFAULT_DB_PATH)))
 
@@ -199,7 +201,7 @@ def get_settings() -> AppSettings:
         ),
         supplement_mock_signals=_parse_bool(
             os.getenv("LAB2STARTUP_PERPLEXITY_SUPPLEMENT_MOCK"),
-            default=use_mock_signals,
+            default=False,
         ),
         request_delay_seconds=float(os.getenv("LAB2STARTUP_PERPLEXITY_REQUEST_DELAY", "1.0")),
         max_workers=int(os.getenv("LAB2STARTUP_PERPLEXITY_MAX_WORKERS", "3")),

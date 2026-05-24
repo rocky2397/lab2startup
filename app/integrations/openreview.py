@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import time
 import unicodedata
@@ -16,9 +17,13 @@ import httpx
 from app.integrations.openalex import TOPIC_KEYWORD_RULES, infer_topic
 from app.models import IdentityConfidence, Paper, PaperAuthor, Researcher
 
+logger = logging.getLogger(__name__)
+
 OPENREVIEW_API_BASE = "https://api2.openreview.net"
 DEFAULT_USER_AGENT = "Lab2Startup/0.1 (mailto:research@example.com)"
 NOTES_PAGE_SIZE = 1000
+DEFAULT_MAX_RETRIES = 6
+PROFILE_PROGRESS_EVERY = 25
 
 VENUE_PREFIXES: dict[str, str] = {
     "neurips": "NeurIPS.cc",
@@ -38,7 +43,8 @@ class OpenReviewConfig:
     accepted_only: bool = True
     fetch_profiles: bool = True
     fetch_as_source: bool = False
-    request_delay_seconds: float = 0.5
+    request_delay_seconds: float = 1.0
+    max_retries: int = DEFAULT_MAX_RETRIES
 
 
 def _slugify(value: str) -> str:
@@ -129,7 +135,8 @@ class OpenReviewClient:
         self,
         *,
         timeout: float = 30.0,
-        request_delay_seconds: float = 0.5,
+        request_delay_seconds: float = 1.0,
+        max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
         self._client = httpx.Client(
             base_url=OPENREVIEW_API_BASE,
@@ -137,6 +144,7 @@ class OpenReviewClient:
             timeout=timeout,
         )
         self.request_delay_seconds = request_delay_seconds
+        self.max_retries = max_retries
 
     def close(self) -> None:
         self._client.close()
@@ -151,11 +159,56 @@ class OpenReviewClient:
         if self.request_delay_seconds:
             time.sleep(self.request_delay_seconds)
 
+    @staticmethod
+    def _retry_wait(response: httpx.Response, attempt: int, base_delay: float) -> float:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return max(float(retry_after), base_delay)
+            except ValueError:
+                pass
+        return min(base_delay * (2**attempt), 60.0)
+
+    def _retry_base_delay(self) -> float:
+        return max(self.request_delay_seconds, 0.01)
+
     def _get(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        response = self._client.get(path, params=params)
-        response.raise_for_status()
-        self._pause()
-        return response.json()
+        base_delay = self._retry_base_delay()
+        for attempt in range(self.max_retries):
+            response = self._client.get(path, params=params)
+
+            if response.status_code == 429:
+                if attempt >= self.max_retries - 1:
+                    response.raise_for_status()
+                wait = self._retry_wait(response, attempt, base_delay)
+                logger.warning(
+                    "OpenReview rate limited on %s (attempt %s/%s); waiting %.1fs",
+                    path,
+                    attempt + 1,
+                    self.max_retries,
+                    wait,
+                )
+                time.sleep(wait)
+                continue
+
+            if response.status_code >= 500:
+                if attempt >= self.max_retries - 1:
+                    response.raise_for_status()
+                wait = min(base_delay * (2**attempt), 60.0)
+                logger.warning(
+                    "OpenReview server error %s on %s; waiting %.1fs",
+                    response.status_code,
+                    path,
+                    wait,
+                )
+                time.sleep(wait)
+                continue
+
+            response.raise_for_status()
+            self._pause()
+            return response.json()
+
+        raise RuntimeError(f"OpenReview request failed after {self.max_retries} retries: {path}")
 
     def get_note(self, note_id: str) -> dict[str, Any] | None:
         payload = self._get("/notes", params={"id": note_id})
@@ -163,17 +216,45 @@ class OpenReviewClient:
         return notes[0] if notes else None
 
     def get_profile(self, profile_id: str) -> dict[str, Any] | None:
-        payload = self._get("/profiles", params={"id": profile_id})
+        try:
+            payload = self._get("/profiles", params={"id": profile_id})
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "Skipping OpenReview profile %s after retries: %s",
+                profile_id,
+                exc,
+            )
+            return None
         profiles = payload.get("profiles") or []
         return profiles[0] if profiles else None
 
     def get_profiles(self, profile_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Fetch profiles one at a time (OpenReview guest API is single-id only)."""
         profiles: dict[str, dict[str, Any]] = {}
-        for profile_id in profile_ids:
+        skipped = 0
+        total = len(profile_ids)
+
+        for index, profile_id in enumerate(profile_ids, start=1):
             profile = self.get_profile(profile_id)
             if profile:
                 profiles[profile_id] = profile
+            else:
+                skipped += 1
+
+            if index % PROFILE_PROGRESS_EVERY == 0:
+                logger.info(
+                    "OpenReview profiles: %s/%s fetched (%s skipped so far)",
+                    index,
+                    total,
+                    skipped,
+                )
+
+        if skipped:
+            logger.warning(
+                "OpenReview profile fetch skipped %s/%s profiles (rate limits or missing data)",
+                skipped,
+                total,
+            )
         return profiles
 
     def iter_submission_notes(
@@ -285,7 +366,10 @@ def fetch_papers_from_openreview(config: OpenReviewConfig) -> list[Paper]:
     """Fetch accepted conference papers from OpenReview."""
     venue_id = venue_id_for_conference(config.conference, config.year)
 
-    with OpenReviewClient(request_delay_seconds=config.request_delay_seconds) as client:
+    with OpenReviewClient(
+        request_delay_seconds=config.request_delay_seconds,
+        max_retries=config.max_retries,
+    ) as client:
         notes = client.iter_submission_notes(
             venue_id=venue_id,
             accepted_only=config.accepted_only,
@@ -334,7 +418,10 @@ def enrich_papers_with_openreview(
 
     venue_id = venue_id_for_conference(config.conference, config.year)
 
-    with OpenReviewClient(request_delay_seconds=config.request_delay_seconds) as client:
+    with OpenReviewClient(
+        request_delay_seconds=config.request_delay_seconds,
+        max_retries=config.max_retries,
+    ) as client:
         notes = client.iter_submission_notes(
             venue_id=venue_id,
             accepted_only=config.accepted_only,

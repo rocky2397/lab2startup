@@ -134,23 +134,9 @@ def detect_signals(
     if use_mock_signals and _should_load_mock_signals(github_config, perplexity_config):
         raw_signals = load_signals(signals_path)
 
-    if github_config is not None and github_config.enabled:
-        from app.integrations.github import (
-            apply_github_usernames,
-            detect_github_signals,
-            merge_github_signals,
-        )
+    researchers = profile_result.researchers
 
-        github_signals = detect_github_signals(
-            profile_result.papers,
-            profile_result.researchers,
-            github_config,
-        )
-        raw_signals = merge_github_signals(raw_signals, github_signals)
-        researchers = apply_github_usernames(profile_result.researchers, github_signals)
-    else:
-        researchers = profile_result.researchers
-
+    # Perplexity is the primary signal source (researcher-centric web search).
     if perplexity_config is not None and perplexity_config.enabled:
         from app.integrations.perplexity import (
             detect_perplexity_signals,
@@ -163,6 +149,22 @@ def detect_signals(
             perplexity_config,
         )
         raw_signals = merge_perplexity_signals(raw_signals, perplexity_signals)
+
+    # GitHub is optional — OSS momentum supplement keyed off paper titles.
+    if github_config is not None and github_config.enabled:
+        from app.integrations.github import (
+            apply_github_usernames,
+            detect_github_signals,
+            merge_github_signals,
+        )
+
+        github_signals = detect_github_signals(
+            profile_result.papers,
+            researchers,
+            github_config,
+        )
+        raw_signals = merge_github_signals(raw_signals, github_signals)
+        researchers = apply_github_usernames(researchers, github_signals)
 
     resolved_signals, unmatched = attach_signals(
         raw_signals,

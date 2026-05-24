@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from app.integrations.openreview import (
@@ -160,3 +161,39 @@ def test_extract_researchers_after_openreview_sync() -> None:
         extract_researchers([paper]),
     )
     assert researchers[0].affiliation == "Stanford University"
+
+
+def test_get_profile_retries_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int] = []
+    request = httpx.Request("GET", "https://api2.openreview.net/profiles")
+
+    def fake_get(*args: object, **kwargs: object) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429, request=request, headers={"Retry-After": "0"})
+        return httpx.Response(
+            200,
+            request=request,
+            json={"profiles": [{"id": "~John_Yang3", "content": {"history": []}}]},
+        )
+
+    with OpenReviewClient(request_delay_seconds=0, max_retries=3) as client:
+        monkeypatch.setattr(client._client, "get", fake_get)
+        profile = client.get_profile("~John_Yang3")
+
+    assert profile is not None
+    assert profile["id"] == "~John_Yang3"
+    assert len(calls) == 2
+
+
+def test_get_profile_skips_after_exhausted_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    request = httpx.Request("GET", "https://api2.openreview.net/profiles")
+
+    def fake_get(*args: object, **kwargs: object) -> httpx.Response:
+        return httpx.Response(429, request=request, headers={"Retry-After": "0"})
+
+    with OpenReviewClient(request_delay_seconds=0, max_retries=2) as client:
+        monkeypatch.setattr(client._client, "get", fake_get)
+        profile = client.get_profile("~Missing_Profile1")
+
+    assert profile is None

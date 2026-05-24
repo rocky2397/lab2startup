@@ -77,7 +77,7 @@ class PerplexityConfig:
     max_researchers: int = 10
     max_signals_per_researcher: int = 2
     min_identity_confidence: IdentityConfidence = IdentityConfidence.HIGH
-    supplement_mock_signals: bool = True
+    supplement_mock_signals: bool = False
     request_delay_seconds: float = 1.0
     max_workers: int = 3
     fund_context: str | None = None
