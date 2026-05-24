@@ -32,7 +32,11 @@ class ScoringResult:
         return ranked[0] if ranked else None
 
 
-def compute_scores(detection: SignalDetectionResult) -> ScoringResult:
+def compute_scores(
+    detection: SignalDetectionResult,
+    *,
+    topic_scores: dict[str, int] | None = None,
+) -> ScoringResult:
     """Score all researchers and clusters from a signal detection result."""
     papers_by_id = {paper.id: paper for paper in detection.papers}
     signals_by_researcher = {
@@ -45,6 +49,7 @@ def compute_scores(detection: SignalDetectionResult) -> ScoringResult:
             researcher,
             papers_by_id,
             signals_by_researcher[researcher.id],
+            topic_scores=topic_scores,
         )
         for researcher in detection.researchers
     ]
@@ -74,6 +79,9 @@ def run_scoring(
     openreview_config=None,
     semantic_scholar_config=None,
     github_config=None,
+    perplexity_config=None,
+    use_mock_signals: bool = True,
+    topic_scores: dict[str, int] | None = None,
 ) -> ScoringResult:
     """Run the full pipeline through scoring."""
     detection = detect_signals(
@@ -84,8 +92,10 @@ def run_scoring(
         openreview_config=openreview_config,
         semantic_scholar_config=semantic_scholar_config,
         github_config=github_config,
+        perplexity_config=perplexity_config,
+        use_mock_signals=use_mock_signals,
     )
-    return compute_scores(detection)
+    return compute_scores(detection, topic_scores=topic_scores)
 
 
 def summarize_scoring(result: ScoringResult) -> dict[str, object]:

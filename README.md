@@ -6,7 +6,7 @@ An agentic VC sourcing tool that tracks researchers from top academic AI confere
 
 Start from academic conference data (papers and authors), extract researcher profiles and coauthor clusters, attach commercialization signals, score startup likelihood, and produce founder-monitoring reports.
 
-**Current status: Step 10d complete** — GitHub signal detection for open-source commercialization activity. OpenReview, Semantic Scholar, OpenAlex, and JSON fallback remain available.
+**Current status: Step 11–14 in progress** — SQLite run persistence, CLI orchestrator, production mode, dashboard run selector. See [PLAN.md](PLAN.md).
 
 ## MVP Scope
 
@@ -29,6 +29,7 @@ lab2startup/
       semantic_scholar.py    # Semantic Scholar enrichment (Step 10b)
       openreview.py          # OpenReview fetch + affiliations (Step 10c)
       github.py              # GitHub signal detection (Step 10d)
+      perplexity.py          # Perplexity founder signal search (Step 10e)
     main.py                  # FastAPI entrypoint (Step 8)
     database.py              # SQLite helpers (Step 2/8)
     models.py                # Data models (Step 2)
@@ -235,7 +236,60 @@ python -m app.integrations.github \
   --researcher "John Yang"
 ```
 
-## How to Run / Test (Step 10d)
+## Perplexity founder signal search (Step 10e)
+
+Use the [Perplexity Sonar API](https://docs.perplexity.ai/) to search the public web for founder, startup, and commercialization evidence **per researcher**. Disabled by default; when enabled, Perplexity signals are **merged with** mock JSON and GitHub signals (deduplicated by URL).
+
+Researchers are queried with paper titles, affiliation, and profile URLs as context. Only researchers meeting the identity-confidence threshold are queried (default: `high` only) to reduce false positives.
+
+### Enable in the pipeline
+
+Copy `.env.example` to `.env` and set your API key, or export variables directly:
+
+```bash
+export LAB2STARTUP_PERPLEXITY_ENABLED=true
+export LAB2STARTUP_PERPLEXITY_API_KEY=your_key_here
+export LAB2STARTUP_PERPLEXITY_MODEL=sonar-pro
+export LAB2STARTUP_PERPLEXITY_MAX_RESEARCHERS=10
+
+python run_dashboard.py
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LAB2STARTUP_PERPLEXITY_ENABLED` | `true` | Enable Perplexity signal detection |
+| `LAB2STARTUP_PERPLEXITY_API_KEY` | — | Perplexity API key (required when enabled) |
+| `LAB2STARTUP_PERPLEXITY_MODEL` | `sonar-pro` | Sonar model (`sonar-pro`, `sonar`, etc.) |
+| `LAB2STARTUP_PERPLEXITY_MAX_RESEARCHERS` | `10` | Cap API calls per pipeline run |
+| `LAB2STARTUP_PERPLEXITY_MAX_SIGNALS_PER_RESEARCHER` | `2` | Max signals emitted per researcher |
+| `LAB2STARTUP_PERPLEXITY_MIN_IDENTITY` | `high` | Minimum identity confidence (`high`, `medium`, `low`) |
+| `LAB2STARTUP_PERPLEXITY_SUPPLEMENT_MOCK` | `true` | Keep mock signals and append new Perplexity ones |
+| `LAB2STARTUP_PERPLEXITY_REQUEST_DELAY` | `1.0` | Delay between API requests (seconds) |
+| `LAB2STARTUP_PERPLEXITY_MAX_WORKERS` | `3` | Parallel Perplexity queries |
+
+The first request with a new JSON schema may take 10–30 seconds while Perplexity prepares it. Subsequent requests are faster.
+
+### Performance tips
+
+| Goal | Setting |
+|------|---------|
+| **Fast dashboard startup** | Disk cache (`LAB2STARTUP_PIPELINE_CACHE_ENABLED=true`, default) — restarts skip live API calls |
+| **Live founder search** | Perplexity is **on by default**; runs on first load or **Refresh live data** |
+| **Disable Perplexity** | `LAB2STARTUP_PERPLEXITY_ENABLED=false` |
+| **Faster Perplexity refresh** | Raise `LAB2STARTUP_PERPLEXITY_MAX_WORKERS` (e.g. `3`) |
+
+Cached results live in `.cache/` and invalidate when config or input JSON files change.
+
+### CLI — probe a researcher
+
+```bash
+python -m app.integrations.perplexity \
+  --name "John Yang" \
+  --affiliation "Stanford University" \
+  --paper-title "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering"
+```
+
+## How to Run / Test (Step 10e)
 
 ### Dashboard (recommended)
 
@@ -351,9 +405,38 @@ The Streamlit dashboard lives in [`dashboard/streamlit_app.py`](dashboard/stream
 - Researcher or cluster view
 - Score breakdown chart, signal list, full markdown report
 
+## Monthly conference run (Backtrace scope)
+
+Lab2Startup defaults to the **Backtrace Capital** fund profile (`funds/backtrace.yaml`). Only Backtrace-relevant conferences are allowed (NeurIPS, ICML, MLSys, OSDI, SOSP, NSDI, USENIX Security, ICSE).
+
+```bash
+export LAB2STARTUP_MODE=production
+export LAB2STARTUP_FUND=backtrace   # default
+
+# List conferences in scope
+python run_pipeline.py --list-conferences
+
+# Run NeurIPS 2025 (OpenReview — auto-selected for NeurIPS)
+python run_pipeline.py --conference NeurIPS --year 2025
+
+# MLSys via OpenAlex (OpenReview not available)
+python run_pipeline.py --conference MLSys --year 2025 --paper-source openalex
+
+python run_dashboard.py
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LAB2STARTUP_FUND` | `backtrace` | Fund profile in `funds/` — scopes conferences, scoring, Perplexity |
+| `LAB2STARTUP_MODE` | `development` | `production` disables mock signals, dashboard uses SQLite runs |
+| `LAB2STARTUP_DB_PATH` | `.cache/lab2startup.db` | SQLite database for stored runs |
+| `LAB2STARTUP_USE_MOCK_SIGNALS` | `true` in dev, `false` in prod | Load `sample_signals.json` |
+
+Development mode keeps mock JSON for tests and prototyping. See [PLAN.md](PLAN.md) for the full roadmap.
+
 ## Next Step
 
-**Step 10e:** Web search integration for founder and company signals.
+**Step 15:** Fund/thesis profiles (`funds/*.yaml`) and run diff vs previous month.
 
 ## Build Roadmap
 
@@ -371,5 +454,10 @@ The Streamlit dashboard lives in [`dashboard/streamlit_app.py`](dashboard/stream
 | 10a | OpenAlex paper ingestion |
 | 10b | Semantic Scholar enrichment |
 | 10c | OpenReview affiliations |
-| 10d | GitHub signal detection *(current)* |
-| 10e+ | Web search |
+| 10d | GitHub signal detection |
+| 10e | Perplexity founder signal search |
+| 11 | SQLite run persistence *(current)* |
+| 12 | CLI `run_pipeline.py` / `lab2startup-run` |
+| 13 | Production mode (`LAB2STARTUP_MODE=production`) |
+| 14 | Dashboard run selector |
+| 15+ | Fund profiles, run diff |

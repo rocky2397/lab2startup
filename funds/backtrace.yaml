@@ -1,0 +1,72 @@
+id: backtrace
+name: Backtrace Capital
+description: >
+  Munich-based pre-seed/seed VC (Fund I, ~€50m) focused on deep-tech infrastructure —
+  platform engineering, secure compute, developer tooling, AI/ML infrastructure, and
+  security — not biotech or consumer apps.
+
+# Conferences Backtrace would monitor before each submission cycle.
+# sources: which paper APIs support this venue (openreview | openalex)
+conferences:
+  - name: NeurIPS
+    sources: [openreview, openalex]
+    priority: high
+  - name: ICML
+    sources: [openreview, openalex]
+    priority: high
+  - name: MLSys
+    sources: [openalex]
+    priority: high
+  - name: OSDI
+    sources: [openalex]
+    priority: high
+  - name: SOSP
+    sources: [openalex]
+    priority: high
+  - name: NSDI
+    sources: [openalex]
+    priority: high
+  - name: USENIX Security
+    sources: [openalex]
+    priority: high
+  - name: ICSE
+    sources: [openalex]
+    priority: medium
+
+# Topic relevance for scoring and optional paper filtering
+topic_keywords:
+  - AI agents
+  - ML systems
+  - machine learning systems
+  - platform engineering
+  - developer tools
+  - devtools
+  - infrastructure
+  - distributed systems
+  - security
+  - secure compute
+  - AI infrastructure
+  - MLOps
+  - systems for ML
+
+exclude_topic_keywords:
+  - biotech
+  - drug discovery
+  - genomics
+  - protein folding
+  - clinical trial
+
+topic_scores:
+  AI agents: 20
+  ML systems: 20
+  robotics: 14
+  biotech AI: 4
+
+perplexity_context: |
+  You are sourcing for Backtrace Capital, a Munich pre-seed/seed VC investing in deep-tech
+  infrastructure: platform engineering, developer tooling, AI/ML infrastructure, secure
+  compute, and security — NOT biotech drug discovery or consumer social apps.
+  Prioritize evidence of startups/products in those areas. Deprioritize pure academic
+  biotech or life-sciences commercialization unless clearly infrastructure/tooling for ML.
+
+default_paper_source: openreview

@@ -1,4 +1,4 @@
-"""Streamlit dashboard for ranked candidates and reports (Step 9)."""
+"""Streamlit dashboard for ranked candidates and reports (Step 9/14)."""
 
 from __future__ import annotations
 
@@ -15,9 +15,13 @@ os.chdir(ROOT_DIR)
 import pandas as pd
 import streamlit as st
 
-from app.models import VCAction
+from app.config import get_settings
+from app.models import RunStatus, VCAction
+from app.pipeline_cache import cache_status
 from app.report_generator import RECOMMENDATION_LABELS, render_report_markdown
-from app.service import get_report_result
+from app.run_service import execute_pipeline_run
+from app.run_store import list_runs
+from app.service import clear_cache, get_report_result, set_active_run_id
 from dashboard.filters import (
     filter_cluster_reports,
     filter_researcher_reports,
@@ -27,9 +31,31 @@ from dashboard.filters import (
 
 
 @st.cache_data(show_spinner="Loading Lab2Startup pipeline...")
-def load_pipeline():
+def load_pipeline(force_refresh: bool = False, run_id: str | None = None):
     """Load and cache the full analysis pipeline."""
-    return get_report_result()
+    if run_id:
+        set_active_run_id(run_id)
+    return get_report_result(force_refresh=force_refresh, run_id=run_id)
+
+
+def _active_integrations(settings) -> list[str]:
+    active: list[str] = []
+    if settings.openreview_config is not None and settings.openreview_config.enabled:
+        active.append("OpenReview")
+    if settings.semantic_scholar_config.enabled:
+        active.append("Semantic Scholar")
+    if settings.github_config.enabled:
+        active.append("GitHub")
+    if settings.perplexity_config.enabled:
+        active.append("Perplexity")
+    if settings.paper_source != "json":
+        active.append(f"Papers: {settings.paper_source}")
+    return active or ["Mock JSON only"]
+
+
+def _run_label(run) -> str:
+    created = run.created_at[:10] if run.created_at else "unknown"
+    return f"{run.conference} {run.year} — {created} ({run.status.value})"
 
 
 def score_breakdown_dataframe(report) -> pd.DataFrame:
@@ -68,7 +94,90 @@ def main() -> None:
     st.title("Lab2Startup")
     st.caption("Founder signal monitoring for academic AI researchers")
 
-    result = load_pipeline()
+    settings = get_settings()
+    fund = settings.fund_profile
+    fund_conferences = fund.conference_names if fund else ["NeurIPS"]
+    default_conference = fund_conferences[0] if fund_conferences else "NeurIPS"
+
+    stored_runs = list_runs(db_path=settings.db_path, limit=30)
+    complete_runs = [run for run in stored_runs if run.status == RunStatus.COMPLETE]
+
+    if "selected_run_id" not in st.session_state:
+        st.session_state.selected_run_id = complete_runs[0].id if complete_runs else None
+
+    with st.sidebar:
+        st.header("Pipeline")
+        st.caption(f"Mode: **{settings.mode}**")
+        if fund:
+            st.markdown(f"**Fund:** {fund.name}")
+            st.caption(fund.description[:180] + ("…" if len(fund.description) > 180 else ""))
+            st.caption("Conferences in scope: " + ", ".join(fund_conferences))
+        st.caption("Active sources: " + ", ".join(_active_integrations(settings)))
+
+        if complete_runs:
+            run_options = {_run_label(run): run.id for run in complete_runs}
+            labels = list(run_options.keys())
+            current_id = st.session_state.selected_run_id
+            default_index = 0
+            if current_id in run_options.values():
+                default_index = list(run_options.values()).index(current_id)
+            selected_label = st.selectbox("Stored run", labels, index=default_index)
+            st.session_state.selected_run_id = run_options[selected_label]
+        elif settings.is_production:
+            st.warning(
+                "No stored runs yet. Start one below or run:\n"
+                "`python run_pipeline.py --conference NeurIPS --year 2024`"
+            )
+        else:
+            status = cache_status(
+                settings,
+                cache_dir=settings.pipeline_cache_dir,
+                ttl_hours=settings.pipeline_cache_ttl_hours,
+            )
+            if status.get("hit"):
+                st.success(
+                    f"Disk cache available ({status.get('age_hours', '?')}h old)."
+                )
+            elif settings.pipeline_cache_enabled:
+                st.caption(status.get("message", "No cache yet — first load may be slow."))
+
+        if settings.is_production:
+            st.subheader("New conference run")
+            run_conference = st.selectbox("Conference", fund_conferences, index=0)
+            run_year = st.number_input("Year", min_value=2000, max_value=2100, value=2024)
+            fund_entry = fund.conference(run_conference) if fund else None
+            source_options = list(fund_entry.sources) if fund_entry else ["openreview", "openalex", "json"]
+            paper_source = st.selectbox("Paper source", source_options, index=0)
+            if st.button("Run pipeline & save", type="primary"):
+                with st.spinner("Running pipeline — this may take several minutes..."):
+                    run, _ = execute_pipeline_run(
+                        conference=run_conference,
+                        year=int(run_year),
+                        paper_source=paper_source,
+                        fund_profile=fund.id if fund else settings.fund_id,
+                        settings=settings,
+                    )
+                    st.session_state.selected_run_id = run.id
+                load_pipeline.clear()
+                clear_cache()
+                st.rerun()
+        else:
+            if st.button("Refresh live data", help="Re-run all enabled integrations"):
+                clear_cache()
+                load_pipeline.clear()
+                st.session_state.do_refresh = True
+                st.rerun()
+
+        if settings.perplexity_config.enabled and not settings.perplexity_config.api_key:
+            st.error("Perplexity is enabled but LAB2STARTUP_PERPLEXITY_API_KEY is missing.")
+
+        st.divider()
+        st.header("Filters")
+
+    result = load_pipeline(
+        force_refresh=st.session_state.pop("do_refresh", False),
+        run_id=st.session_state.selected_run_id,
+    )
     detection = result.scoring.detection
     papers = detection.papers
 
@@ -78,7 +187,6 @@ def main() -> None:
     rec_options = recommendation_options()
 
     with st.sidebar:
-        st.header("Filters")
         view_mode = st.radio("View", ["Researchers", "Clusters"], horizontal=True)
         min_score = st.slider("Minimum score", min_value=0, max_value=100, value=60)
         recommendation_label = st.selectbox(
@@ -161,7 +269,7 @@ def main() -> None:
         for report in filtered_reports
     ]
     st.subheader("Ranked candidates")
-    st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
 
     report_ids = [report.id for report in filtered_reports]
     selected_report_id = st.selectbox(
@@ -183,7 +291,7 @@ def main() -> None:
         st.subheader("Score breakdown")
         breakdown_df = score_breakdown_dataframe(selected_report)
         st.bar_chart(breakdown_df.set_index("Component")["Score"])
-        st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
+        st.dataframe(breakdown_df, width="stretch", hide_index=True)
 
     with right:
         st.subheader("Detected signals")

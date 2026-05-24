@@ -51,6 +51,34 @@ class VCAction(str, Enum):
     IGNORE_FOR_NOW = "ignore_for_now"
 
 
+class RunStatus(str, Enum):
+    """Lifecycle status for a persisted pipeline run."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETE = "complete"
+    FAILED = "failed"
+
+
+class PipelineRun(BaseModel):
+    """Metadata for a stored conference sourcing run."""
+
+    id: str
+    conference: str
+    year: int
+    status: RunStatus
+    paper_source: str
+    fund_profile: str | None = None
+    created_at: str
+    completed_at: str | None = None
+    config_json: dict[str, object] = Field(default_factory=dict)
+    error_message: str | None = None
+    paper_count: int | None = None
+    researcher_count: int | None = None
+    signal_count: int | None = None
+    report_count: int | None = None
+
+
 class PaperAuthor(BaseModel):
     """Author entry embedded in a conference paper record."""
 

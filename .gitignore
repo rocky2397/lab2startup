@@ -26,7 +26,11 @@ htmlcov/
 # Local data / secrets
 .env
 .env.*
+!.env.example
 *.local
 
 # Generated reports
 reports/
+
+# Pipeline disk cache
+.cache/

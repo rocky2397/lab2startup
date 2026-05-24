@@ -98,6 +98,17 @@ class SignalDetectionResult:
         return [signal for signal in self.signals if signal.cluster_id == cluster_id]
 
 
+def _should_load_mock_signals(
+    github_config=None,
+    perplexity_config=None,
+) -> bool:
+    """Load mock JSON unless an enabled integration opts out of supplementing it."""
+    for config in (github_config, perplexity_config):
+        if config is not None and config.enabled and not config.supplement_mock_signals:
+            return False
+    return True
+
+
 def detect_signals(
     papers_path: Path | str | None = None,
     signals_path: Path | str | None = None,
@@ -107,6 +118,8 @@ def detect_signals(
     openreview_config=None,
     semantic_scholar_config=None,
     github_config=None,
+    perplexity_config=None,
+    use_mock_signals: bool = True,
 ) -> SignalDetectionResult:
     """Load profiles and attach commercialization signals."""
     profile_result = build_profiles(
@@ -117,8 +130,8 @@ def detect_signals(
         semantic_scholar_config=semantic_scholar_config,
     )
 
-    raw_signals = []
-    if github_config is None or github_config.supplement_mock_signals:
+    raw_signals: list[Signal] = []
+    if use_mock_signals and _should_load_mock_signals(github_config, perplexity_config):
         raw_signals = load_signals(signals_path)
 
     if github_config is not None and github_config.enabled:
@@ -137,6 +150,19 @@ def detect_signals(
         researchers = apply_github_usernames(profile_result.researchers, github_signals)
     else:
         researchers = profile_result.researchers
+
+    if perplexity_config is not None and perplexity_config.enabled:
+        from app.integrations.perplexity import (
+            detect_perplexity_signals,
+            merge_perplexity_signals,
+        )
+
+        perplexity_signals = detect_perplexity_signals(
+            profile_result.papers,
+            researchers,
+            perplexity_config,
+        )
+        raw_signals = merge_perplexity_signals(raw_signals, perplexity_signals)
 
     resolved_signals, unmatched = attach_signals(
         raw_signals,

@@ -101,6 +101,9 @@ def run_reports(
     openreview_config=None,
     semantic_scholar_config=None,
     github_config=None,
+    perplexity_config=None,
+    use_mock_signals: bool = True,
+    topic_scores: dict[str, int] | None = None,
     min_score: int = 0,
     include_clusters: bool = True,
 ) -> ReportResult:
@@ -113,6 +116,9 @@ def run_reports(
         openreview_config=openreview_config,
         semantic_scholar_config=semantic_scholar_config,
         github_config=github_config,
+        perplexity_config=perplexity_config,
+        use_mock_signals=use_mock_signals,
+        topic_scores=topic_scores,
     )
     reports = generate_reports(
         scoring,

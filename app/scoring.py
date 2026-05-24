@@ -92,14 +92,20 @@ def score_research_quality(researcher: Researcher, papers_by_id: dict[str, Paper
     return min(20, max(paper_scores))
 
 
-def score_applied_relevance(researcher: Researcher, papers_by_id: dict[str, Paper]) -> int:
+def score_applied_relevance(
+    researcher: Researcher,
+    papers_by_id: dict[str, Paper],
+    *,
+    topic_scores: dict[str, int] | None = None,
+) -> int:
     """Score how applied the research topics are for startup/commercial use."""
     papers = _researcher_papers(researcher, papers_by_id)
     if not papers:
         return 0
 
-    topic_scores = [APPLIED_TOPIC_SCORES.get(paper.topic, 10) for paper in papers]
-    return min(20, max(topic_scores))
+    scores_map = {**APPLIED_TOPIC_SCORES, **(topic_scores or {})}
+    topic_values = [scores_map.get(paper.topic, 10) for paper in papers]
+    return min(20, max(topic_values))
 
 
 def score_team_continuity(researcher: Researcher) -> int:
@@ -180,11 +186,17 @@ def score_researcher(
     researcher: Researcher,
     papers_by_id: dict[str, Paper],
     signals: list[Signal],
+    *,
+    topic_scores: dict[str, int] | None = None,
 ) -> EntityScore:
     """Compute a full score breakdown for one researcher."""
     breakdown = ScoreBreakdown(
         research_quality=score_research_quality(researcher, papers_by_id),
-        applied_relevance=score_applied_relevance(researcher, papers_by_id),
+        applied_relevance=score_applied_relevance(
+            researcher,
+            papers_by_id,
+            topic_scores=topic_scores,
+        ),
         team_continuity=score_team_continuity(researcher),
         open_source_or_project_momentum=score_open_source_or_project_momentum(signals),
         commercialization_signal_strength=score_commercialization_signal_strength(signals),
