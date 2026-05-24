@@ -47,6 +47,26 @@ class FundProfile:
                 return conference
         return None
 
+    def conferences_with_priority(self, priority: str) -> tuple[FundConference, ...]:
+        normalized = priority.strip().lower()
+        return tuple(
+            conference
+            for conference in self.conferences
+            if conference.priority.lower() == normalized
+        )
+
+    @property
+    def high_priority_conferences(self) -> list[str]:
+        return [conference.name for conference in self.conferences_with_priority("high")]
+
+    def conference_label(self, name: str) -> str:
+        """Human-readable label with paper source hint."""
+        entry = self.conference(name)
+        if entry is None:
+            return name
+        sources = "/".join(entry.sources)
+        return f"{entry.name} ({sources}, {entry.priority})"
+
     def supports_source(self, conference: str, paper_source: str) -> bool:
         entry = self.conference(conference)
         if entry is None:
@@ -184,3 +204,22 @@ def applied_topic_scores_for_fund(fund: FundProfile | None) -> dict[str, int]:
     if fund is None or not fund.topic_scores:
         return {}
     return dict(fund.topic_scores)
+
+
+def resolve_conference_list(
+    fund: FundProfile,
+    *,
+    conferences: list[str] | None = None,
+    priority: str | None = None,
+) -> list[str]:
+    """Resolve which conferences to run for a fund."""
+    if conferences:
+        for name in conferences:
+            validate_conference_for_fund(name, fund)
+        return conferences
+    if priority:
+        selected = fund.conferences_with_priority(priority)
+        if not selected:
+            raise ValueError(f"No conferences with priority '{priority}' for {fund.name}")
+        return [conference.name for conference in selected]
+    raise ValueError("Provide conferences or a priority filter")

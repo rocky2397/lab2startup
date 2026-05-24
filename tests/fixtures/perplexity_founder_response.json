@@ -11,7 +11,7 @@
       "finish_reason": "stop",
       "message": {
         "role": "assistant",
-        "content": "{\"signals\": [{\"signal_type\": \"commercialization\", \"description\": \"Personal website links to ProgramBench and SWE-agent related projects.\", \"source_url\": \"https://john-b-yang.github.io/\", \"evidence_strength\": \"medium\"}]}"
+        "content": "{\"profile\": {\"affiliation\": \"Stanford University\", \"role\": \"PhD Student\", \"identity_confidence\": \"high\", \"profile_url\": \"https://john-b-yang.github.io/\", \"identity_explanation\": \"Personal site lists Stanford affiliation and SWE-agent papers.\"}, \"signals\": [{\"signal_type\": \"commercialization\", \"description\": \"Personal website links to ProgramBench and SWE-agent related projects.\", \"source_url\": \"https://john-b-yang.github.io/\", \"evidence_strength\": \"medium\"}]}"
       }
     }
   ]

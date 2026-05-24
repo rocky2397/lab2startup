@@ -148,15 +148,14 @@ def ingest_papers(
             sync_researchers_with_openreview,
         )
 
-        if not openreview_config.fetch_as_source:
+        if not openreview_config.fetch_as_source and openreview_config.fetch_profiles:
             papers = enrich_papers_with_openreview(papers, openreview_config)
 
     researchers = extract_researchers(papers)
 
-    if openreview_config is not None and openreview_config.enabled:
-        from app.integrations.openreview import sync_researchers_with_openreview
+    from app.integrations.openreview import sync_researchers_with_openreview
 
-        researchers = sync_researchers_with_openreview(papers, researchers)
+    researchers = sync_researchers_with_openreview(papers, researchers)
 
     return IngestionResult(papers=papers, researchers=researchers)
 

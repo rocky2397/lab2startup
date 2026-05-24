@@ -23,11 +23,13 @@ from app.run_service import execute_pipeline_run
 from app.run_store import list_runs
 from app.service import clear_cache, get_report_result, set_active_run_id
 from dashboard.filters import (
+    diagnose_filter_miss,
     filter_cluster_reports,
     filter_researcher_reports,
     recommendation_options,
     researcher_id_from_report_id,
 )
+from dashboard.leaderboard_ui import render_top_prospects_board
 from dashboard.scoring_ui import (
     render_candidate_score_breakdown_expander,
     render_scoring_methodology_expander,
@@ -68,6 +70,21 @@ def _run_label(run) -> str:
     return f"{run.conference} {run.year} — {created} ({run.status.value})"
 
 
+def _conference_scope_table(fund) -> pd.DataFrame:
+    """Build a dataframe summarizing fund conference coverage."""
+    if not fund:
+        return pd.DataFrame()
+    rows = [
+        {
+            "Conference": conference.name,
+            "Priority": conference.priority.title(),
+            "Paper source": " / ".join(conference.sources),
+        }
+        for conference in fund.conferences
+    ]
+    return pd.DataFrame(rows)
+
+
 def main() -> None:
     st.set_page_config(
         page_title="Lab2Startup",
@@ -95,7 +112,11 @@ def main() -> None:
         if fund:
             st.markdown(f"**Fund:** {fund.name}")
             st.caption(fund.description[:180] + ("…" if len(fund.description) > 180 else ""))
-            st.caption("Conferences in scope: " + ", ".join(fund_conferences))
+            with st.expander(f"Conferences in scope ({len(fund.conferences)})", expanded=False):
+                st.dataframe(_conference_scope_table(fund), width="stretch", hide_index=True)
+                st.caption(
+                    "OpenReview: NeurIPS, ICML, ICLR · OpenAlex: systems, security, devtools, data infra"
+                )
         st.caption("Active sources: " + ", ".join(_active_integrations(settings)))
 
         if complete_runs:
@@ -107,6 +128,9 @@ def main() -> None:
                 default_index = list(run_options.values()).index(current_id)
             selected_label = st.selectbox("Stored run", labels, index=default_index)
             st.session_state.selected_run_id = run_options[selected_label]
+            if st.session_state.get("loaded_run_id") != st.session_state.selected_run_id:
+                st.session_state.loaded_run_id = st.session_state.selected_run_id
+                st.session_state.pop("dashboard_min_score", None)
         elif settings.is_production:
             st.warning(
                 "No stored runs yet. Start one below or run:\n"
@@ -127,33 +151,90 @@ def main() -> None:
 
         if settings.is_production:
             st.subheader("New conference run")
-            run_conference = st.selectbox("Conference", fund_conferences, index=0)
             run_year = st.number_input("Year", min_value=2000, max_value=2100, value=2024)
-            fund_entry = fund.conference(run_conference) if fund else None
+            run_scope = st.radio(
+                "Run scope",
+                ["Single conference", "All high-priority", "Custom selection"],
+                index=0,
+            )
+
+            if run_scope == "Single conference":
+                run_targets = [
+                    st.selectbox(
+                        "Conference",
+                        fund_conferences,
+                        index=0,
+                        format_func=lambda name: fund.conference_label(name) if fund else name,
+                    )
+                ]
+            elif run_scope == "All high-priority":
+                run_targets = fund.high_priority_conferences if fund else fund_conferences[:4]
+                st.caption(
+                    "Will run: "
+                    + ", ".join(run_targets[:8])
+                    + ("…" if len(run_targets) > 8 else "")
+                )
+            else:
+                run_targets = st.multiselect(
+                    "Conferences",
+                    fund_conferences,
+                    default=fund.high_priority_conferences[:3] if fund else fund_conferences[:3],
+                    format_func=lambda name: fund.conference_label(name) if fund else name,
+                )
+
+            fund_entry = fund.conference(run_targets[0]) if fund and run_targets else None
             source_options = list(fund_entry.sources) if fund_entry else ["openreview", "openalex", "json"]
-            paper_source = st.selectbox("Paper source", source_options, index=0)
-            if st.button("Run pipeline & save", type="primary"):
+            paper_source = st.selectbox(
+                "Paper source",
+                source_options,
+                index=0,
+                help="Auto-selected per conference when running a batch (OpenReview vs OpenAlex).",
+            )
+            if run_scope != "Single conference":
+                st.caption("Paper source applies only when a conference supports it; others use their default.")
+
+            if st.button("Run pipeline & save", type="primary", disabled=not run_targets):
                 try:
-                    with st.spinner("Running pipeline — this may take several minutes..."):
+                    progress = st.progress(0.0, text="Starting pipeline run...")
+                    completed: list[str] = []
+                    last_run_id: str | None = None
+
+                    for index, run_conference in enumerate(run_targets, start=1):
+                        progress.progress(
+                            (index - 1) / len(run_targets),
+                            text=f"Running {run_conference} {int(run_year)} ({index}/{len(run_targets)})...",
+                        )
+                        entry = fund.conference(run_conference) if fund else None
+                        source = paper_source if entry and paper_source in entry.sources else None
                         run, _ = execute_pipeline_run(
                             conference=run_conference,
                             year=int(run_year),
-                            paper_source=paper_source,
+                            paper_source=source,
                             fund_profile=fund.id if fund else settings.fund_id,
                             settings=settings,
                         )
-                        st.session_state.selected_run_id = run.id
+                        completed.append(run.id)
+                        last_run_id = run.id
+
+                    progress.progress(1.0, text=f"Finished {len(run_targets)} conference run(s).")
+                    st.session_state.selected_run_id = last_run_id
+                    if len(completed) > 1:
+                        st.success(
+                            "Saved runs: "
+                            + ", ".join(completed[:5])
+                            + ("…" if len(completed) > 5 else "")
+                        )
                     load_pipeline.clear()
                     clear_cache()
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Pipeline run failed: {exc}")
                     st.info(
-                        "OpenReview often returns **429 Too Many Requests** when fetching many "
-                        "author profiles. Wait a few minutes and retry, or set a slower delay:\n\n"
-                        "`LAB2STARTUP_OPENREVIEW_REQUEST_DELAY=2.0`\n\n"
-                        "To skip affiliation lookups (faster, still runs Perplexity):\n\n"
-                        "`LAB2STARTUP_OPENREVIEW_FETCH_PROFILES=false`"
+                        "OpenReview paper fetch failed (often **429 Too Many Requests** on profile lookups). "
+                        "Affiliations are now resolved by **Perplexity** — ensure "
+                        "`LAB2STARTUP_OPENREVIEW_FETCH_PROFILES=false` and your Perplexity API key is set.\n\n"
+                        "If paper fetch still fails, wait a few minutes and retry, or increase:\n\n"
+                        "`LAB2STARTUP_OPENREVIEW_REQUEST_DELAY=2.0`"
                     )
         else:
             st.caption(
@@ -194,10 +275,31 @@ def main() -> None:
     years = sorted({paper.year for paper in papers}, reverse=True)
     topics = sorted({paper.topic for paper in papers})
     rec_options = recommendation_options()
+    active_run = next(
+        (run for run in complete_runs if run.id == st.session_state.selected_run_id),
+        None,
+    )
+
+    if active_run:
+        st.caption(
+            f"Viewing stored run: **{active_run.conference} {active_run.year}** "
+            f"({active_run.paper_source})"
+        )
+
+    filter_ns = st.session_state.get("loaded_run_id") or "default"
 
     with st.sidebar:
         view_mode = st.radio("View", ["Researchers", "Clusters"], horizontal=True)
-        min_score = st.slider("Minimum score", min_value=0, max_value=100, value=60)
+        min_score = st.slider(
+            "Minimum score",
+            min_value=0,
+            max_value=100,
+            value=st.session_state.get("dashboard_min_score", 40),
+            key=f"min_score_{filter_ns}",
+        )
+        st.session_state.dashboard_min_score = min_score
+        if min_score >= 60:
+            st.caption("Tip: lower to 40 or 0 if this run has few/no Perplexity signals yet.")
         recommendation_label = st.selectbox(
             "Recommendation",
             ["All"] + [label for label, _ in rec_options],
@@ -208,9 +310,24 @@ def main() -> None:
                 value for label, value in rec_options if label == recommendation_label
             )
 
-        conference = st.selectbox("Conference", ["All"] + conferences)
-        year_label = st.selectbox("Year", ["All"] + [str(y) for y in years])
-        topic = st.selectbox("Topic", ["All"] + topics)
+        conference = st.selectbox(
+            "Conference",
+            ["All"] + conferences,
+            index=0,
+            key=f"conference_{filter_ns}",
+        )
+        year_label = st.selectbox(
+            "Year",
+            ["All"] + [str(y) for y in years],
+            index=0,
+            key=f"year_{filter_ns}",
+        )
+        topic = st.selectbox(
+            "Topic",
+            ["All"] + topics,
+            index=0,
+            key=f"topic_{filter_ns}",
+        )
 
         conference_filter = None if conference == "All" else conference
         year_filter = None if year_label == "All" else int(year_label)
@@ -243,8 +360,89 @@ def main() -> None:
         )
 
     if not filtered_reports:
-        st.warning("No candidates match the current filters.")
-        return
+        diagnosis = diagnose_filter_miss(
+            result.reports,
+            detection.researchers,
+            papers,
+            min_score=min_score,
+            recommendation=recommendation,
+            conference=conference_filter,
+            year=year_filter,
+            topic=topic_filter,
+        )
+        st.warning("No candidates match the current sidebar filters.")
+        st.info(
+            f"**{diagnosis['total_researchers']}** researchers in this run · "
+            f"**{diagnosis['above_min_score']}** at or above min score **{min_score}** · "
+            f"**{diagnosis['after_metadata_filters']}** after conference/year/topic filters.\n\n"
+            "Try lowering **Minimum score** to **0** in the sidebar, set filters to **All**, "
+            "or check that Perplexity signals finished for this run."
+        )
+
+    researcher_reports = [
+        report for report in result.reports if report.id.startswith("report_researcher_")
+    ]
+
+    tab_top, tab_explore = st.tabs(["Top prospects", "Explore & details"])
+
+    with tab_top:
+        if view_mode == "Researchers":
+            if researcher_reports:
+                top_selection = render_top_prospects_board(
+                    reports=researcher_reports,
+                    researchers=detection.researchers,
+                    papers=papers,
+                    conference=conference_filter,
+                    year=year_filter,
+                    topic=topic_filter,
+                )
+                if top_selection:
+                    st.session_state.selected_report_id = top_selection
+            else:
+                st.warning("This run has no researcher scores yet.")
+        else:
+            st.info("Switch to **Researchers** in the sidebar to see the highest-potential leaderboard.")
+            if filtered_reports:
+                cluster_rows = [
+                    {
+                        "Name": report.researcher_or_cluster,
+                        "Score": report.startup_likelihood_score,
+                        "Recommendation": RECOMMENDATION_LABELS[report.recommendation],
+                        "Signals": len(report.signals),
+                    }
+                    for report in filtered_reports[:15]
+                ]
+                st.dataframe(pd.DataFrame(cluster_rows), width="stretch", hide_index=True)
+
+    with tab_explore:
+        if not filtered_reports:
+            st.caption("Adjust sidebar filters to explore individual candidate reports.")
+            return
+        _render_explore_tab(
+            filtered_reports=filtered_reports,
+            view_mode=view_mode,
+            detection=detection,
+            fund=fund,
+            topic_scores=settings.topic_scores,
+        )
+
+
+def _render_explore_tab(
+    *,
+    filtered_reports,
+    view_mode: str,
+    detection,
+    fund,
+    topic_scores,
+) -> None:
+    if "selected_report_id" in st.session_state:
+        preferred = st.session_state.selected_report_id
+        if preferred in [report.id for report in filtered_reports]:
+            default_index = [report.id for report in filtered_reports].index(preferred)
+        else:
+            default_index = 0
+    else:
+        default_index = 0
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Candidates", len(filtered_reports))
@@ -284,12 +482,14 @@ def main() -> None:
     selected_report_id = st.selectbox(
         "Select candidate for details",
         report_ids,
+        index=default_index,
         format_func=lambda report_id: next(
             report.researcher_or_cluster
             for report in filtered_reports
             if report.id == report_id
         ),
     )
+    st.session_state.selected_report_id = selected_report_id
     selected_report = next(
         report for report in filtered_reports if report.id == selected_report_id
     )
@@ -334,7 +534,7 @@ def main() -> None:
     st.subheader("Details")
     render_scoring_methodology_expander(
         fund=fund,
-        topic_scores=settings.topic_scores,
+        topic_scores=topic_scores,
     )
     render_candidate_score_breakdown_expander(selected_report)
     render_signal_sources_expander(selected_report.signals)

@@ -31,6 +31,27 @@ DEFAULT_USER_AGENT = "Lab2Startup/0.1"
 SIGNAL_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
+        "profile": {
+            "type": "object",
+            "properties": {
+                "affiliation": {"type": "string"},
+                "role": {"type": "string"},
+                "identity_confidence": {
+                    "type": "string",
+                    "enum": ["high", "medium", "low"],
+                },
+                "profile_url": {"type": "string"},
+                "identity_explanation": {"type": "string"},
+            },
+            "required": [
+                "affiliation",
+                "role",
+                "identity_confidence",
+                "profile_url",
+                "identity_explanation",
+            ],
+            "additionalProperties": False,
+        },
         "signals": {
             "type": "array",
             "items": {
@@ -60,9 +81,9 @@ SIGNAL_RESPONSE_SCHEMA: dict[str, Any] = {
                 ],
                 "additionalProperties": False,
             },
-        }
+        },
     },
-    "required": ["signals"],
+    "required": ["profile", "signals"],
     "additionalProperties": False,
 }
 
@@ -81,6 +102,7 @@ class PerplexityConfig:
     request_delay_seconds: float = 1.0
     max_workers: int = 3
     fund_context: str | None = None
+    enrich_profiles: bool = True
 
 
 def _is_valid_http_url(value: str) -> bool:
@@ -169,24 +191,29 @@ def build_founder_search_prompt(context: dict[str, Any]) -> str:
         "You are helping a deep-tech VC source potential academic founders.\n\n"
         f"{fund_block}"
         f"Researcher: {context['name']}\n"
-        f"Affiliation: {context['affiliation']}\n"
-        f"Role: {context['role']}\n\n"
+        f"Known affiliation (may be missing): {context['affiliation']}\n"
+        f"Known role: {context['role']}\n\n"
         f"Conference papers:\n{paper_block}\n\n"
         f"Known profiles:\n{profile_block}\n\n"
-        "Search the public web for evidence that THIS SPECIFIC PERSON is:\n"
+        "Step 1 — Resolve this exact person on the public web:\n"
+        "- Find their current affiliation and role (university, lab, PhD/postdoc/faculty).\n"
+        "- Set identity_confidence to high only when name + affiliation + papers clearly match "
+        "one person; medium if plausible but ambiguous; low if uncertain.\n"
+        "- profile_url should be their best primary page (personal site, lab page, Google Scholar, "
+        "LinkedIn, or OpenReview) — use a real URL you found.\n\n"
+        "Step 2 — Search for founder/commercialization evidence for THIS SAME PERSON:\n"
         "- founding or co-founding a startup,\n"
         "- commercializing research via a product or company website,\n"
         "- or actively building a public project with commercial potential.\n\n"
         "Rules:\n"
-        "- Only include evidence that plausibly refers to this exact person "
-        "(match name + affiliation/university).\n"
+        "- Only include evidence that plausibly refers to this exact person.\n"
         "- Prefer primary sources: company sites, personal pages, news, LinkedIn, Crunchbase.\n"
         "- Do NOT invent URLs. Use real pages you found in search.\n"
-        "- If no credible evidence exists, return one item with signal_type=no_signal, "
+        "- If no credible founder signal exists, return one signals item with signal_type=no_signal, "
         "source_url=https://example.com/no-signal, evidence_strength=low, "
         "and description explaining no public founder signal was found.\n"
         "- Return at most 2 signals, ranked by relevance.\n"
-        "Return JSON matching the provided schema."
+        "Return JSON matching the provided schema (profile + signals)."
     )
 
 
@@ -226,6 +253,52 @@ def _pick_source_url(
         if _is_valid_http_url(citation):
             return citation
     return None
+
+
+def _map_identity_confidence(raw: str) -> IdentityConfidence:
+    try:
+        return IdentityConfidence(raw)
+    except ValueError:
+        return IdentityConfidence.MEDIUM
+
+
+def parse_perplexity_profile(
+    payload: dict[str, Any],
+    *,
+    researcher: Researcher,
+    citations: list[str],
+) -> Researcher:
+    """Apply Perplexity profile resolution onto a researcher record."""
+    profile = payload.get("profile")
+    if not isinstance(profile, dict):
+        return researcher
+
+    affiliation = str(profile.get("affiliation") or "").strip()
+    role = str(profile.get("role") or "").strip()
+    confidence = _map_identity_confidence(str(profile.get("identity_confidence", "medium")))
+    explanation = str(profile.get("identity_explanation") or "").strip()
+    profile_url = _pick_source_url(str(profile.get("profile_url") or ""), citations)
+
+    updates: dict[str, Any] = {
+        "identity_confidence": confidence,
+        "identity_confidence_explanation": explanation
+        or f"Perplexity web search resolved profile for {researcher.name}.",
+    }
+
+    if affiliation and affiliation.lower() != "unknown":
+        updates["affiliation"] = affiliation[:200]
+    if role and role.lower() != "researcher":
+        updates["role"] = role[:120]
+    elif role:
+        updates["role"] = role[:120]
+
+    if profile_url and "openreview.net/profile" in profile_url.lower():
+        profile_id = profile_url.split("id=", 1)[-1]
+        updates["openreview_url"] = profile_url
+        if profile_id:
+            updates["openreview_profile_id"] = profile_id
+
+    return researcher.model_copy(update=updates)
 
 
 def parse_perplexity_signals(
@@ -313,8 +386,8 @@ class PerplexityClient:
         if self.request_delay_seconds:
             time.sleep(self.request_delay_seconds)
 
-    def search_founder_signals(self, context: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
-        """Run a structured Sonar query for founder/commercialization evidence."""
+    def search_researcher_intel(self, context: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+        """Run a structured Sonar query for profile resolution and founder signals."""
         prompt = build_founder_search_prompt(context)
         response = self._client.post(
             "/v1/sonar",
@@ -324,7 +397,7 @@ class PerplexityClient:
                 "response_format": {
                     "type": "json_schema",
                     "json_schema": {
-                        "name": "founder_signals",
+                        "name": "researcher_intel",
                         "schema": SIGNAL_RESPONSE_SCHEMA,
                     },
                 },
@@ -343,37 +416,26 @@ class PerplexityClient:
         parsed = _extract_json_object(content)
         return parsed, citations
 
-
-def _identity_rank(confidence: IdentityConfidence) -> int:
-    order = {
-        IdentityConfidence.LOW: 0,
-        IdentityConfidence.MEDIUM: 1,
-        IdentityConfidence.HIGH: 2,
-    }
-    return order[confidence]
+    def search_founder_signals(self, context: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+        """Backward-compatible alias for researcher intel queries."""
+        return self.search_researcher_intel(context)
 
 
-def _eligible_researchers(
+def _target_researchers_for_perplexity(
     researchers: list[Researcher],
     config: PerplexityConfig,
 ) -> list[Researcher]:
-    """Filter researchers by identity confidence and cap count."""
-    min_rank = _identity_rank(config.min_identity_confidence)
-    eligible = [
-        researcher
-        for researcher in researchers
-        if _identity_rank(researcher.identity_confidence) >= min_rank
-    ]
-    eligible.sort(key=lambda r: (-len(r.papers), r.name))
-    return eligible[: config.max_researchers]
+    """Select top researchers by paper count for Perplexity enrichment."""
+    ranked = sorted(researchers, key=lambda researcher: (-len(researcher.papers), researcher.name))
+    return ranked[: config.max_researchers]
 
 
-def _query_researcher_signals(
+def _query_researcher_intel(
     researcher: Researcher,
     papers_by_id: dict[str, Paper],
     config: PerplexityConfig,
-) -> list[Signal]:
-    """Run one Perplexity query for a single researcher."""
+) -> tuple[Researcher, list[Signal]]:
+    """Run one Perplexity query for profile resolution and founder signals."""
     context = build_researcher_context(
         researcher,
         papers_by_id,
@@ -385,16 +447,80 @@ def _query_researcher_signals(
         request_delay_seconds=config.request_delay_seconds,
     ) as client:
         try:
-            payload, citations = client.search_founder_signals(context)
+            payload, citations = client.search_researcher_intel(context)
         except (httpx.HTTPError, ValueError, json.JSONDecodeError):
-            return []
+            return researcher, []
 
-        return parse_perplexity_signals(
+        updated = (
+            parse_perplexity_profile(payload, researcher=researcher, citations=citations)
+            if config.enrich_profiles
+            else researcher
+        )
+        signals = parse_perplexity_signals(
             payload,
-            researcher=researcher,
+            researcher=updated,
             citations=citations,
             max_signals=config.max_signals_per_researcher,
         )
+        return updated, signals
+
+
+def apply_perplexity_researcher_updates(
+    researchers: list[Researcher],
+    updates_by_id: dict[str, Researcher],
+) -> list[Researcher]:
+    """Merge Perplexity profile updates back into the full researcher list."""
+    if not updates_by_id:
+        return researchers
+    return [updates_by_id.get(researcher.id, researcher) for researcher in researchers]
+
+
+def enrich_researchers_with_perplexity(
+    papers: list[Paper],
+    researchers: list[Researcher],
+    config: PerplexityConfig,
+) -> tuple[list[Researcher], list[Signal]]:
+    """Resolve affiliations and founder signals via Perplexity web search."""
+    if not config.enabled or not config.api_key or not researchers:
+        return researchers, []
+
+    papers_by_id = {paper.id: paper for paper in papers}
+    targets = _target_researchers_for_perplexity(researchers, config)
+    updates_by_id: dict[str, Researcher] = {}
+    signals: list[Signal] = []
+    seen_urls: set[str] = set()
+
+    worker_count = max(1, min(config.max_workers, len(targets)))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = {
+            executor.submit(_query_researcher_intel, researcher, papers_by_id, config): researcher
+            for researcher in targets
+        }
+        for future in as_completed(futures):
+            try:
+                updated_researcher, researcher_signals = future.result()
+            except Exception:
+                continue
+
+            updates_by_id[updated_researcher.id] = updated_researcher
+            for signal in researcher_signals:
+                url = signal.source_url.rstrip("/")
+                if url in seen_urls:
+                    continue
+                signals.append(signal)
+                seen_urls.add(url)
+
+    return apply_perplexity_researcher_updates(researchers, updates_by_id), signals
+
+
+def _query_researcher_signals(
+    researcher: Researcher,
+    papers_by_id: dict[str, Paper],
+    config: PerplexityConfig,
+) -> list[Signal]:
+    """Run one Perplexity query for a single researcher (signals only)."""
+    _, signals = _query_researcher_intel(researcher, papers_by_id, config)
+    return signals
 
 
 def detect_perplexity_signals(
@@ -403,33 +529,7 @@ def detect_perplexity_signals(
     config: PerplexityConfig,
 ) -> list[Signal]:
     """Query Perplexity for founder signals on selected researchers."""
-    if not config.enabled or not config.api_key or not researchers:
-        return []
-
-    papers_by_id = {paper.id: paper for paper in papers}
-    targets = _eligible_researchers(researchers, config)
-    signals: list[Signal] = []
-    seen_urls: set[str] = set()
-
-    worker_count = max(1, min(config.max_workers, len(targets)))
-    with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        futures = {
-            executor.submit(_query_researcher_signals, researcher, papers_by_id, config): researcher
-            for researcher in targets
-        }
-        for future in as_completed(futures):
-            try:
-                researcher_signals = future.result()
-            except Exception:
-                continue
-
-            for signal in researcher_signals:
-                url = signal.source_url.rstrip("/")
-                if url in seen_urls:
-                    continue
-                signals.append(signal)
-                seen_urls.add(url)
-
+    _, signals = enrich_researchers_with_perplexity(papers, researchers, config)
     return signals
 
 

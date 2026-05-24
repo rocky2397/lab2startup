@@ -136,14 +136,14 @@ def detect_signals(
 
     researchers = profile_result.researchers
 
-    # Perplexity is the primary signal source (researcher-centric web search).
+    # Perplexity resolves affiliations and founder signals in one web search per researcher.
     if perplexity_config is not None and perplexity_config.enabled:
         from app.integrations.perplexity import (
-            detect_perplexity_signals,
+            enrich_researchers_with_perplexity,
             merge_perplexity_signals,
         )
 
-        perplexity_signals = detect_perplexity_signals(
+        researchers, perplexity_signals = enrich_researchers_with_perplexity(
             profile_result.papers,
             researchers,
             perplexity_config,

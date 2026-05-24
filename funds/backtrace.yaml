@@ -5,18 +5,24 @@ description: >
   platform engineering, secure compute, developer tooling, AI/ML infrastructure, and
   security — not biotech or consumer apps.
 
-# Conferences Backtrace would monitor before each submission cycle.
-# sources: which paper APIs support this venue (openreview | openalex)
+# Conferences Backtrace monitors before each submission cycle.
+# sources: openreview (ML venues) | openalex (systems/security/devtools)
 conferences:
+  # --- ML & AI infrastructure (high) ---
   - name: NeurIPS
     sources: [openreview, openalex]
     priority: high
   - name: ICML
     sources: [openreview, openalex]
     priority: high
+  - name: ICLR
+    sources: [openreview, openalex]
+    priority: high
   - name: MLSys
     sources: [openalex]
     priority: high
+
+  # --- Systems & infrastructure (high) ---
   - name: OSDI
     sources: [openalex]
     priority: high
@@ -26,10 +32,34 @@ conferences:
   - name: NSDI
     sources: [openalex]
     priority: high
+  - name: ASPLOS
+    sources: [openalex]
+    priority: high
+  - name: EuroSys
+    sources: [openalex]
+    priority: high
+
+  # --- Security (high) ---
   - name: USENIX Security
     sources: [openalex]
     priority: high
+  - name: CCS
+    sources: [openalex]
+    priority: high
+
+  # --- Developer tools & software engineering (medium) ---
   - name: ICSE
+    sources: [openalex]
+    priority: medium
+  - name: FSE
+    sources: [openalex]
+    priority: medium
+
+  # --- Data infrastructure (medium) ---
+  - name: SIGMOD
+    sources: [openalex]
+    priority: medium
+  - name: VLDB
     sources: [openalex]
     priority: medium
 
@@ -59,6 +89,8 @@ exclude_topic_keywords:
 topic_scores:
   AI agents: 20
   ML systems: 20
+  Platform engineering: 19
+  Security: 18
   robotics: 14
   biotech AI: 4
 

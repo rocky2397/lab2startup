@@ -1,7 +1,11 @@
 """Tests for dashboard filter helpers."""
 
 from app.agents.report_agent import run_reports
-from dashboard.filters import filter_researcher_reports, recommendation_options
+from dashboard.filters import (
+    diagnose_filter_miss,
+    filter_researcher_reports,
+    recommendation_options,
+)
 
 
 def test_filter_researcher_reports_by_score_and_topic() -> None:
@@ -41,3 +45,19 @@ def test_recommendation_options() -> None:
     options = recommendation_options()
     assert len(options) == 4
     assert any(value == "take_meeting" for _, value in options)
+
+
+def test_diagnose_filter_miss_flags_min_score() -> None:
+    result = run_reports(include_clusters=False)
+    detection = result.scoring.detection
+
+    diagnosis = diagnose_filter_miss(
+        result.reports,
+        detection.researchers,
+        detection.papers,
+        min_score=100,
+    )
+
+    assert diagnosis["total_researchers"] == 30
+    assert diagnosis["above_min_score"] == 0
+    assert diagnosis["after_all_filters"] == 0

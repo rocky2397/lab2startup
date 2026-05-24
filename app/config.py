@@ -93,7 +93,7 @@ def _build_openreview_config(*, fetch_as_source: bool) -> OpenReviewConfig | Non
             year=int(os.getenv("LAB2STARTUP_OPENREVIEW_YEAR", "2024")),
             max_results=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RESULTS", "50")),
             accepted_only=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_ACCEPTED_ONLY"), True),
-            fetch_profiles=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_FETCH_PROFILES"), True),
+            fetch_profiles=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_FETCH_PROFILES"), False),
             request_delay_seconds=float(os.getenv("LAB2STARTUP_OPENREVIEW_REQUEST_DELAY", "1.0")),
             max_retries=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RETRIES", "6")),
         )
@@ -108,7 +108,7 @@ def _build_openreview_config(*, fetch_as_source: bool) -> OpenReviewConfig | Non
         year=int(os.getenv("LAB2STARTUP_OPENREVIEW_YEAR", "2024")),
         max_results=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RESULTS", "1000")),
         accepted_only=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_ACCEPTED_ONLY"), True),
-        fetch_profiles=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_FETCH_PROFILES"), True),
+        fetch_profiles=_parse_bool(os.getenv("LAB2STARTUP_OPENREVIEW_FETCH_PROFILES"), False),
         request_delay_seconds=float(os.getenv("LAB2STARTUP_OPENREVIEW_REQUEST_DELAY", "1.0")),
         max_retries=int(os.getenv("LAB2STARTUP_OPENREVIEW_MAX_RETRIES", "6")),
     )
@@ -116,7 +116,7 @@ def _build_openreview_config(*, fetch_as_source: bool) -> OpenReviewConfig | Non
 
 def _parse_identity_confidence(raw: str | None) -> IdentityConfidence:
     if raw is None:
-        return IdentityConfidence.HIGH
+        return IdentityConfidence.LOW
     normalized = raw.strip().lower()
     for confidence in IdentityConfidence:
         if confidence.value == normalized:
@@ -206,6 +206,7 @@ def get_settings() -> AppSettings:
         request_delay_seconds=float(os.getenv("LAB2STARTUP_PERPLEXITY_REQUEST_DELAY", "1.0")),
         max_workers=int(os.getenv("LAB2STARTUP_PERPLEXITY_MAX_WORKERS", "3")),
         fund_context=fund_context,
+        enrich_profiles=_parse_bool(os.getenv("LAB2STARTUP_PERPLEXITY_ENRICH_PROFILES"), True),
     )
 
     from app.pipeline_cache import DEFAULT_CACHE_DIR

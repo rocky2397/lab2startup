@@ -24,6 +24,8 @@ KNOWN_CONFERENCE_SOURCES: dict[str, str] = {
     "neural information processing systems": "S4306420609",
     "icml": "S196734849",
     "international conference on machine learning": "S196734849",
+    "iclr": "S4306419643",
+    "international conference on learning representations": "S4306419643",
     "mlsys": "S4210210349",
     "osdi": "S4306420608",
     "sosp": "S4306420610",
@@ -255,8 +257,9 @@ class OpenAlexClient:
     def resolve_source_id(self, conference: str) -> str | None:
         """Resolve a conference name to an OpenAlex source ID."""
         normalized = conference.strip().lower()
-        if normalized in KNOWN_CONFERENCE_SOURCES:
-            return KNOWN_CONFERENCE_SOURCES[normalized]
+        known = KNOWN_CONFERENCE_SOURCES.get(normalized)
+        if known and known.startswith("S"):
+            return known
 
         payload = self._get(
             "/sources",

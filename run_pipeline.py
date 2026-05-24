@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from app.config import clear_settings_cache, get_settings
 from app.fund_profiles import DEFAULT_FUND_ID, list_fund_profiles, load_fund_profile
-from app.run_service import execute_pipeline_run
+from app.run_service import execute_batch_pipeline_runs, execute_pipeline_run
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -30,9 +30,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--conferences",
+        default="",
+        help="Comma-separated conference list (overrides --conference)",
+    )
+    parser.add_argument(
+        "--priority",
+        choices=["high", "medium", "low"],
+        default=None,
+        help="Run all fund conferences at this priority level",
+    )
+    parser.add_argument(
         "--conference",
         default=default_conference,
-        help="Conference name (must be in the active fund profile)",
+        help="Single conference name (must be in the active fund profile)",
     )
     parser.add_argument("--year", type=int, default=2024, help="Conference year")
     parser.add_argument(
@@ -107,16 +118,37 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     topics = [part.strip() for part in args.topics.split(",") if part.strip()]
+    conference_list = [part.strip() for part in args.conferences.split(",") if part.strip()]
+    targets: list[str] = []
+    batch_results: list = []
 
     try:
-        run, result = execute_pipeline_run(
-            conference=args.conference,
-            year=args.year,
-            paper_source=args.paper_source,
-            fund_profile=fund_id,
-            topics=topics,
-            settings=settings,
-        )
+        if conference_list or args.priority:
+            from app.fund_profiles import resolve_conference_list
+
+            targets = resolve_conference_list(
+                fund,
+                conferences=conference_list or None,
+                priority=args.priority,
+            )
+            batch_results = execute_batch_pipeline_runs(
+                conferences=targets,
+                year=args.year,
+                paper_source=args.paper_source,
+                fund_profile=fund_id,
+                topics=topics,
+                settings=settings,
+            )
+            run, result = batch_results[-1]
+        else:
+            run, result = execute_pipeline_run(
+                conference=args.conference,
+                year=args.year,
+                paper_source=args.paper_source,
+                fund_profile=fund_id,
+                topics=topics,
+                settings=settings,
+            )
     except Exception as exc:
         logging.error("Run failed: %s", exc)
         return 1
@@ -138,7 +170,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(summary, indent=2))
     else:
-        print(f"Run complete: {run.id}")
+        if batch_results:
+            print(f"Batch complete: {len(batch_results)} conference run(s)")
+            for batch_run, batch_result in batch_results:
+                print(
+                    f"  - {batch_run.conference} {batch_run.year}: "
+                    f"{len(batch_result.scoring.detection.papers)} papers, "
+                    f"{batch_result.report_count} reports ({batch_run.id})"
+                )
+            print()
+        print(f"Latest run: {run.id}")
         print(f"  Fund: {fund.name}")
         print(f"  Conference: {run.conference} {run.year} ({run.paper_source})")
         print(f"  Papers: {summary['paper_count']}")

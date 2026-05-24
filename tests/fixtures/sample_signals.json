@@ -1,0 +1,85 @@
+{
+  "signals": [
+    {
+      "id": "sig_001",
+      "researcher_name": "John Yang",
+      "signal_type": "commercialization",
+      "description": "Personal website promotes ProgramBench and links to programbench.com alongside SWE-agent/SWE-bench agent evaluation research.",
+      "source_url": "https://john-b-yang.github.io/",
+      "evidence_strength": "medium",
+      "date_found": "2025-05-22"
+    },
+    {
+      "id": "sig_002",
+      "researcher_name": "Carlos E. Jimenez",
+      "signal_type": "commercialization",
+      "description": "SWE-agent and SWE-bench are released as open-source projects with public leaderboard, code, and documentation at swe-agent.com.",
+      "source_url": "https://github.com/SWE-agent/SWE-agent",
+      "evidence_strength": "high",
+      "date_found": "2025-05-22"
+    },
+    {
+      "id": "sig_003",
+      "researcher_name": "Peiyuan Feng",
+      "signal_type": "commercialization",
+      "description": "AGILE agent framework, dataset, and code are publicly released on GitHub under the bytarnish organization with ProductQA benchmarks.",
+      "source_url": "https://github.com/bytarnish/AGILE",
+      "evidence_strength": "medium",
+      "date_found": "2025-05-22"
+    },
+    {
+      "id": "sig_004",
+      "researcher_name": "Shibo Hao",
+      "signal_type": "commercialization",
+      "description": "ToolkenGPT project page and code release document tool-use augmentation for frozen LLMs across reasoning and embodied planning tasks.",
+      "source_url": "https://github.com/HaoShao911/ToolkenGPT",
+      "evidence_strength": "medium",
+      "date_found": "2025-05-22"
+    },
+    {
+      "id": "sig_005",
+      "researcher_name": "Kaidong Zhang",
+      "signal_type": "commercialization",
+      "description": "PIVOT-R publishes a project website with benchmark results, demos, and links to code for language-guided robotic manipulation.",
+      "source_url": "https://abliao.github.io/PIVOT-R/",
+      "evidence_strength": "medium",
+      "date_found": "2025-05-22"
+    },
+    {
+      "id": "sig_006",
+      "researcher_name": "Marinka Zitnik",
+      "signal_type": "confirmed_founder",
+      "description": "Harvard Medical School faculty profile states Dr. Zitnik co-founded Therapeutics Data Commons, an open ML platform for therapeutic science.",
+      "source_url": "https://dbmi.hms.harvard.edu/people/marinka-zitnik",
+      "evidence_strength": "high",
+      "date_found": "2025-05-22"
+    },
+    {
+      "id": "sig_007",
+      "researcher_name": "Zhiting Hu",
+      "signal_type": "possible_founder",
+      "description": "Faculty website lists participation in Maitrix.org, an open-source consortium building AI-powered realities with agent and world models.",
+      "source_url": "https://zhiting.ucsd.edu/",
+      "evidence_strength": "medium",
+      "date_found": "2025-05-22"
+    },
+    {
+      "id": "sig_008",
+      "researcher_name": "Zuobai Zhang",
+      "signal_type": "commercialization",
+      "description": "S3F protein fitness prediction model releases code on GitHub for multi-scale sequence-structure-surface representation learning.",
+      "source_url": "https://arxiv.org/abs/2412.01108",
+      "evidence_strength": "low",
+      "date_found": "2025-05-22"
+    },
+    {
+      "id": "sig_009",
+      "researcher_name": "Leslie Pack Kaelbling",
+      "signal_type": "no_signal",
+      "description": "Public MIT CSAIL profile and publication record show sustained academic research in planning and robotics without recent startup founder announcements.",
+      "source_url": "https://www.csail.mit.edu/person/leslie-kaelbling",
+      "evidence_strength": "low",
+      "date_found": "2025-05-22"
+    }
+  ]
+}

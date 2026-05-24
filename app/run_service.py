@@ -90,7 +90,7 @@ def build_run_configs(
             year=year,
             max_results=base_or.max_results if base_or else 50,
             accepted_only=True,
-            fetch_profiles=base_or.fetch_profiles if base_or else True,
+            fetch_profiles=base_or.fetch_profiles if base_or else False,
             request_delay_seconds=base_or.request_delay_seconds if base_or else 1.0,
             max_retries=base_or.max_retries if base_or else 6,
         )
@@ -160,6 +160,9 @@ def _enrich_openreview_config(
         return configs["openreview_config"]  # type: ignore[return-value]
 
     base_or = settings.openreview_config
+    if base_or is not None and not base_or.fetch_profiles:
+        return None
+
     return OpenReviewConfig(
         enabled=True,
         fetch_as_source=False,
@@ -167,7 +170,7 @@ def _enrich_openreview_config(
         year=year,
         max_results=base_or.max_results if base_or else 50,
         accepted_only=True,
-        fetch_profiles=base_or.fetch_profiles if base_or else True,
+        fetch_profiles=base_or.fetch_profiles if base_or else False,
         request_delay_seconds=base_or.request_delay_seconds if base_or else 1.0,
         max_retries=base_or.max_retries if base_or else 6,
     )
@@ -284,6 +287,35 @@ def execute_pipeline_run(
         mark_run_failed(run_id, str(exc), db_path=db_path)
         logger.exception("Pipeline run failed: %s", run_id)
         raise
+
+
+def execute_batch_pipeline_runs(
+    *,
+    conferences: list[str],
+    year: int,
+    paper_source: str | None = None,
+    fund_profile: str | None = None,
+    topics: list[str] | None = None,
+    db_path: Path | str | None = None,
+    settings: AppSettings | None = None,
+    include_clusters: bool = True,
+) -> list[tuple[PipelineRun, ReportResult]]:
+    """Run the pipeline for multiple conferences sequentially."""
+    results: list[tuple[PipelineRun, ReportResult]] = []
+    for conference in conferences:
+        logger.info("Starting batch run for %s %s", conference, year)
+        run, result = execute_pipeline_run(
+            conference=conference,
+            year=year,
+            paper_source=paper_source,
+            fund_profile=fund_profile,
+            topics=topics,
+            db_path=db_path,
+            settings=settings,
+            include_clusters=include_clusters,
+        )
+        results.append((run, result))
+    return results
 
 
 def get_stored_report_result(

@@ -13,7 +13,9 @@ from app.integrations.perplexity import (
     build_founder_search_prompt,
     build_researcher_context,
     detect_perplexity_signals,
+    enrich_researchers_with_perplexity,
     merge_perplexity_signals,
+    parse_perplexity_profile,
     parse_perplexity_signals,
 )
 from app.models import (
@@ -57,6 +59,25 @@ def test_build_researcher_context() -> None:
     assert context["name"] == "John Yang"
     assert context["papers"][0]["title"] == "SWE-agent"
     assert "OpenReview" in build_founder_search_prompt(context)
+
+
+def test_parse_perplexity_profile(perplexity_response: dict) -> None:
+    researcher = Researcher(
+        id="researcher_john_yang",
+        name="John Yang",
+        affiliation="Unknown",
+        role="Researcher",
+        identity_confidence=IdentityConfidence.LOW,
+    )
+    payload = json.loads(perplexity_response["choices"][0]["message"]["content"])
+    updated = parse_perplexity_profile(
+        payload,
+        researcher=researcher,
+        citations=perplexity_response["citations"],
+    )
+    assert updated.affiliation == "Stanford University"
+    assert updated.role == "PhD Student"
+    assert updated.identity_confidence == IdentityConfidence.HIGH
 
 
 def test_parse_perplexity_signals(perplexity_response: dict) -> None:
@@ -116,6 +137,65 @@ def test_merge_perplexity_signals_deduplicates_urls() -> None:
     assert merged[1].source_url == "https://programbench.com/"
 
 
+def test_enrich_researchers_with_perplexity(
+    monkeypatch: pytest.MonkeyPatch,
+    perplexity_response: dict,
+) -> None:
+    paper = Paper(
+        id="paper_001",
+        title="SWE-agent",
+        conference="NeurIPS",
+        year=2024,
+        topic="AI agents",
+        abstract="test",
+        authors=[PaperAuthor(name="John Yang", affiliation="Stanford", role="PhD Student")],
+    )
+    researcher = Researcher(
+        id="researcher_john_yang",
+        name="John Yang",
+        affiliation="Unknown",
+        role="Researcher",
+        papers=[paper.id],
+        identity_confidence=IdentityConfidence.LOW,
+    )
+    low_confidence = Researcher(
+        id="researcher_other",
+        name="Other Person",
+        affiliation="Unknown",
+        role="Researcher",
+        identity_confidence=IdentityConfidence.LOW,
+    )
+
+    def fake_search_researcher_intel(
+        self,
+        context: dict,
+    ) -> tuple[dict, list[str]]:
+        assert context["name"] == "John Yang"
+        payload = json.loads(perplexity_response["choices"][0]["message"]["content"])
+        return payload, perplexity_response["citations"]
+
+    monkeypatch.setattr(
+        PerplexityClient,
+        "search_researcher_intel",
+        fake_search_researcher_intel,
+    )
+
+    updated_researchers, signals = enrich_researchers_with_perplexity(
+        [paper],
+        [researcher, low_confidence],
+        PerplexityConfig(
+            enabled=True,
+            api_key="test-key",
+            max_researchers=5,
+            request_delay_seconds=0,
+        ),
+    )
+    john = next(item for item in updated_researchers if item.name == "John Yang")
+    assert john.affiliation == "Stanford University"
+    assert len(signals) == 1
+    assert signals[0].researcher_name == "John Yang"
+
+
 def test_detect_perplexity_signals(
     monkeypatch: pytest.MonkeyPatch,
     perplexity_response: dict,
@@ -137,31 +217,23 @@ def test_detect_perplexity_signals(
         papers=[paper.id],
         identity_confidence=IdentityConfidence.HIGH,
     )
-    low_confidence = Researcher(
-        id="researcher_other",
-        name="Other Person",
-        affiliation="Unknown",
-        role="Researcher",
-        identity_confidence=IdentityConfidence.LOW,
-    )
 
-    def fake_search_founder_signals(
+    def fake_search_researcher_intel(
         self,
         context: dict,
     ) -> tuple[dict, list[str]]:
-        assert context["name"] == "John Yang"
         payload = json.loads(perplexity_response["choices"][0]["message"]["content"])
         return payload, perplexity_response["citations"]
 
     monkeypatch.setattr(
         PerplexityClient,
-        "search_founder_signals",
-        fake_search_founder_signals,
+        "search_researcher_intel",
+        fake_search_researcher_intel,
     )
 
     signals = detect_perplexity_signals(
         [paper],
-        [researcher, low_confidence],
+        [researcher],
         PerplexityConfig(
             enabled=True,
             api_key="test-key",
@@ -170,4 +242,3 @@ def test_detect_perplexity_signals(
         ),
     )
     assert len(signals) == 1
-    assert signals[0].researcher_name == "John Yang"

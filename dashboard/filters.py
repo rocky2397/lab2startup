@@ -106,3 +106,67 @@ def recommendation_options() -> list[tuple[str, str]]:
         VCAction.IGNORE_FOR_NOW: "Ignore for now",
     }
     return [(labels[action], action.value) for action in VCAction]
+
+
+def count_researcher_reports(
+    reports: list[Report],
+    *,
+    min_score: int = 0,
+) -> int:
+    """Count researcher reports at or above a score threshold."""
+    return sum(
+        1
+        for report in reports
+        if report.id.startswith("report_researcher_")
+        and report.startup_likelihood_score >= min_score
+    )
+
+
+def diagnose_filter_miss(
+    reports: list[Report],
+    researchers: list[Researcher],
+    papers: list[Paper],
+    *,
+    min_score: int,
+    recommendation: str | None = None,
+    conference: str | None = None,
+    year: int | None = None,
+    topic: str | None = None,
+) -> dict[str, int | str | None]:
+    """Explain why sidebar filters may hide all candidates."""
+    researcher_reports = [
+        report for report in reports if report.id.startswith("report_researcher_")
+    ]
+    total = len(researcher_reports)
+    above_min = count_researcher_reports(reports, min_score=min_score)
+
+    without_score = filter_researcher_reports(
+        reports,
+        researchers,
+        papers,
+        min_score=0,
+        recommendation=recommendation,
+        conference=conference,
+        year=year,
+        topic=topic,
+    )
+    without_rec = filter_researcher_reports(
+        reports,
+        researchers,
+        papers,
+        min_score=min_score,
+        conference=conference,
+        year=year,
+        topic=topic,
+    )
+
+    return {
+        "total_researchers": total,
+        "above_min_score": above_min,
+        "after_metadata_filters": len(without_score),
+        "after_all_filters": len(without_rec),
+        "conference_filter": conference,
+        "year_filter": year,
+        "topic_filter": topic,
+        "min_score": min_score,
+    }
