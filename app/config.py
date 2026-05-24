@@ -1,4 +1,4 @@
-"""Application configuration (Step 10a–10c)."""
+"""Application configuration (Step 10a–10d)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from app.integrations.github import GitHubConfig
 from app.integrations.openalex import OpenAlexFetchConfig
 from app.integrations.openreview import OpenReviewConfig
 from app.integrations.semantic_scholar import SemanticScholarConfig
@@ -23,6 +24,7 @@ class AppSettings:
     openalex_config: OpenAlexFetchConfig | None
     openreview_config: OpenReviewConfig | None
     semantic_scholar_config: SemanticScholarConfig
+    github_config: GitHubConfig
 
 
 def _parse_topic_keywords(raw: str | None) -> list[str]:
@@ -102,6 +104,18 @@ def get_settings() -> AppSettings:
         request_delay_seconds=float(os.getenv("LAB2STARTUP_S2_REQUEST_DELAY", "1.1")),
     )
 
+    github_config = GitHubConfig(
+        enabled=_parse_bool(os.getenv("LAB2STARTUP_GITHUB_ENABLED")),
+        api_token=os.getenv("LAB2STARTUP_GITHUB_TOKEN") or None,
+        min_stars=int(os.getenv("LAB2STARTUP_GITHUB_MIN_STARS", "5")),
+        max_repos_per_paper=int(os.getenv("LAB2STARTUP_GITHUB_MAX_REPOS_PER_PAPER", "2")),
+        supplement_mock_signals=_parse_bool(
+            os.getenv("LAB2STARTUP_GITHUB_SUPPLEMENT_MOCK"),
+            default=True,
+        ),
+        request_delay_seconds=float(os.getenv("LAB2STARTUP_GITHUB_REQUEST_DELAY", "0.5")),
+    )
+
     return AppSettings(
         paper_source=paper_source,
         papers_path=papers_path,
@@ -109,6 +123,7 @@ def get_settings() -> AppSettings:
         openalex_config=openalex_config,
         openreview_config=openreview_config,
         semantic_scholar_config=semantic_scholar_config,
+        github_config=github_config,
     )
 
 

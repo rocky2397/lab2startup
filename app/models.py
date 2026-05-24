@@ -98,6 +98,7 @@ class Researcher(BaseModel):
     paper_count: int | None = None
     openreview_profile_id: str | None = None
     openreview_url: str | None = None
+    github_username: str | None = None
 
 
 class Signal(BaseModel):

@@ -106,8 +106,9 @@ def detect_signals(
     openalex_config=None,
     openreview_config=None,
     semantic_scholar_config=None,
+    github_config=None,
 ) -> SignalDetectionResult:
-    """Load profiles and attach mock commercialization signals."""
+    """Load profiles and attach commercialization signals."""
     profile_result = build_profiles(
         papers_path,
         papers=papers,
@@ -115,16 +116,37 @@ def detect_signals(
         openreview_config=openreview_config,
         semantic_scholar_config=semantic_scholar_config,
     )
-    raw_signals = load_signals(signals_path)
+
+    raw_signals = []
+    if github_config is None or github_config.supplement_mock_signals:
+        raw_signals = load_signals(signals_path)
+
+    if github_config is not None and github_config.enabled:
+        from app.integrations.github import (
+            apply_github_usernames,
+            detect_github_signals,
+            merge_github_signals,
+        )
+
+        github_signals = detect_github_signals(
+            profile_result.papers,
+            profile_result.researchers,
+            github_config,
+        )
+        raw_signals = merge_github_signals(raw_signals, github_signals)
+        researchers = apply_github_usernames(profile_result.researchers, github_signals)
+    else:
+        researchers = profile_result.researchers
+
     resolved_signals, unmatched = attach_signals(
         raw_signals,
-        profile_result.researchers,
+        researchers,
         profile_result.clusters,
     )
 
     return SignalDetectionResult(
         papers=profile_result.papers,
-        researchers=profile_result.researchers,
+        researchers=researchers,
         clusters=profile_result.clusters,
         signals=resolved_signals,
         unmatched_researcher_names=unmatched,

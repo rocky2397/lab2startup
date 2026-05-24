@@ -6,7 +6,7 @@ An agentic VC sourcing tool that tracks researchers from top academic AI confere
 
 Start from academic conference data (papers and authors), extract researcher profiles and coauthor clusters, attach commercialization signals, score startup likelihood, and produce founder-monitoring reports.
 
-**Current status: Step 10c complete** — OpenReview fetch and affiliation enrichment. OpenAlex, Semantic Scholar, and JSON fallback remain available.
+**Current status: Step 10d complete** — GitHub signal detection for open-source commercialization activity. OpenReview, Semantic Scholar, OpenAlex, and JSON fallback remain available.
 
 ## MVP Scope
 
@@ -28,6 +28,7 @@ lab2startup/
       openalex.py            # OpenAlex fetch + normalize (Step 10a)
       semantic_scholar.py    # Semantic Scholar enrichment (Step 10b)
       openreview.py          # OpenReview fetch + affiliations (Step 10c)
+      github.py              # GitHub signal detection (Step 10d)
     main.py                  # FastAPI entrypoint (Step 8)
     database.py              # SQLite helpers (Step 2/8)
     models.py                # Data models (Step 2)
@@ -198,7 +199,43 @@ python -m app.integrations.openreview --conference NeurIPS --year 2024 --max-res
 | `LAB2STARTUP_OPENREVIEW_FETCH_PROFILES` | `true` | Load author profile affiliations |
 | `LAB2STARTUP_OPENREVIEW_REQUEST_DELAY` | `0.5` | Delay between API requests (seconds) |
 
-## How to Run / Test (Step 10c)
+## GitHub signal detection (Step 10d)
+
+Detect **open-source commercialization signals** by searching GitHub for repositories related to each paper title. Disabled by default; when enabled, GitHub signals are **merged with** `sample_signals.json` (deduplicated by URL).
+
+Repositories are matched to researchers using author-name heuristics and organization names derived from paper titles (e.g. `SWE-agent/SWE-agent` → SWE-agent paper authors).
+
+### Enable in the pipeline
+
+```bash
+export LAB2STARTUP_GITHUB_ENABLED=true
+export LAB2STARTUP_GITHUB_TOKEN=your_token_here   # optional, improves rate limits
+export LAB2STARTUP_GITHUB_MIN_STARS=5
+export LAB2STARTUP_GITHUB_MAX_REPOS_PER_PAPER=2
+
+uvicorn app.main:app --reload
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LAB2STARTUP_GITHUB_ENABLED` | `false` | Enable GitHub signal detection |
+| `LAB2STARTUP_GITHUB_TOKEN` | — | GitHub personal access token |
+| `LAB2STARTUP_GITHUB_MIN_STARS` | `5` | Minimum repository stars to emit a signal |
+| `LAB2STARTUP_GITHUB_MAX_REPOS_PER_PAPER` | `2` | Max GitHub signals per paper |
+| `LAB2STARTUP_GITHUB_SUPPLEMENT_MOCK` | `true` | Keep mock signals and append new GitHub ones |
+| `LAB2STARTUP_GITHUB_REQUEST_DELAY` | `0.5` | Delay between API requests (seconds) |
+
+Evidence strength scales with stars and recent activity. GitHub URLs feed directly into the existing **open source / project momentum** scoring component.
+
+### CLI — probe a paper title
+
+```bash
+python -m app.integrations.github \
+  --paper-title "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering" \
+  --researcher "John Yang"
+```
+
+## How to Run / Test (Step 10d)
 
 ### Dashboard (recommended)
 
@@ -316,7 +353,7 @@ The Streamlit dashboard lives in [`dashboard/streamlit_app.py`](dashboard/stream
 
 ## Next Step
 
-**Step 10d:** GitHub integration for open-source and founder signal detection.
+**Step 10e:** Web search integration for founder and company signals.
 
 ## Build Roadmap
 
@@ -333,5 +370,6 @@ The Streamlit dashboard lives in [`dashboard/streamlit_app.py`](dashboard/stream
 | 9 | Streamlit dashboard |
 | 10a | OpenAlex paper ingestion |
 | 10b | Semantic Scholar enrichment |
-| 10c | OpenReview affiliations *(current)* |
-| 10d+ | GitHub, web search |
+| 10c | OpenReview affiliations |
+| 10d | GitHub signal detection *(current)* |
+| 10e+ | Web search |

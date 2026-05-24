@@ -73,6 +73,7 @@ def run_scoring(
     openalex_config=None,
     openreview_config=None,
     semantic_scholar_config=None,
+    github_config=None,
 ) -> ScoringResult:
     """Run the full pipeline through scoring."""
     detection = detect_signals(
@@ -82,6 +83,7 @@ def run_scoring(
         openalex_config=openalex_config,
         openreview_config=openreview_config,
         semantic_scholar_config=semantic_scholar_config,
+        github_config=github_config,
     )
     return compute_scores(detection)
 

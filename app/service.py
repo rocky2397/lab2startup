@@ -18,6 +18,7 @@ def get_report_result() -> ReportResult:
         openalex_config=settings.openalex_config,
         openreview_config=settings.openreview_config,
         semantic_scholar_config=settings.semantic_scholar_config,
+        github_config=settings.github_config,
     )
 
 

@@ -100,6 +100,7 @@ def run_reports(
     openalex_config=None,
     openreview_config=None,
     semantic_scholar_config=None,
+    github_config=None,
     min_score: int = 0,
     include_clusters: bool = True,
 ) -> ReportResult:
@@ -111,6 +112,7 @@ def run_reports(
         openalex_config=openalex_config,
         openreview_config=openreview_config,
         semantic_scholar_config=semantic_scholar_config,
+        github_config=github_config,
     )
     reports = generate_reports(
         scoring,
