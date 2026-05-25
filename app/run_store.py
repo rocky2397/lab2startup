@@ -245,6 +245,31 @@ def mark_run_failed(
         connection.commit()
 
 
+def run_has_results(run: PipelineRun) -> bool:
+    """True when a completed run persisted at least one paper."""
+    return run.status == RunStatus.COMPLETE and (run.paper_count or 0) > 0
+
+
+def filter_runs_with_results(runs: list[PipelineRun]) -> list[PipelineRun]:
+    """Keep only complete runs that have paper data."""
+    return [run for run in runs if run_has_results(run)]
+
+
+def pick_preferred_run_id(
+    runs: list[PipelineRun],
+    *,
+    current_id: str | None = None,
+) -> str | None:
+    """Pick a run for the dashboard — prefer current selection, then most papers."""
+    if not runs:
+        return None
+    run_ids = {run.id for run in runs}
+    if current_id in run_ids:
+        return current_id
+    best = max(runs, key=lambda run: ((run.paper_count or 0), run.created_at))
+    return best.id
+
+
 def list_runs(*, db_path: str | Path | None = None, limit: int = 50) -> list[PipelineRun]:
     init_db(db_path)
     with get_connection(db_path) as connection:

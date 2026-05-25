@@ -20,7 +20,12 @@ from app.models import RunStatus, VCAction
 from app.pipeline_cache import cache_status
 from app.report_generator import RECOMMENDATION_LABELS, render_report_markdown
 from app.run_service import execute_pipeline_run
-from app.run_store import list_runs
+from app.run_store import (
+    filter_runs_with_results,
+    list_runs,
+    pick_preferred_run_id,
+    run_has_results,
+)
 from app.service import clear_cache, get_report_result, set_active_run_id
 from dashboard.filters import (
     diagnose_filter_miss,
@@ -67,7 +72,68 @@ def _active_integrations(settings) -> list[str]:
 
 def _run_label(run) -> str:
     created = run.created_at[:10] if run.created_at else "unknown"
-    return f"{run.conference} {run.year} — {created} ({run.status.value})"
+    stats = ""
+    if run.paper_count is not None:
+        stats = f", {run.paper_count} papers"
+    return f"{run.conference} {run.year} — {created} ({run.status.value}{stats})"
+
+
+def _runs_for_selector(
+    complete_runs: list,
+    *,
+    only_with_results: bool,
+) -> list:
+    if only_with_results:
+        with_results = filter_runs_with_results(complete_runs)
+        if with_results:
+            return with_results
+    return complete_runs
+
+
+def _render_empty_dataset_state(
+    *,
+    active_run,
+    complete_runs: list,
+    only_with_results: bool,
+) -> None:
+    st.warning("No papers or candidates in the current dataset.")
+    if active_run:
+        st.markdown(
+            f"**Selected run:** {active_run.conference} {active_run.year} "
+            f"({active_run.status.value}, {active_run.paper_source})"
+        )
+        if active_run.error_message:
+            st.error(active_run.error_message)
+        elif (active_run.paper_count or 0) == 0:
+            st.info(
+                "This run completed but returned **0 papers** "
+                "(empty fetch, fund filter, or no matching authors)."
+            )
+
+    with_results = filter_runs_with_results(complete_runs)
+    if with_results and (active_run is None or not run_has_results(active_run)):
+        st.success(
+            f"**{len(with_results)}** stored run(s) have paper data. "
+            "Turn on **Only show runs with results** in the sidebar, "
+            "or pick one from **Stored run**."
+        )
+
+    if complete_runs:
+        summary_rows = [
+            {
+                "Conference": run.conference,
+                "Year": run.year,
+                "Status": run.status.value,
+                "Papers": run.paper_count if run.paper_count is not None else "—",
+                "Researchers": run.researcher_count if run.researcher_count is not None else "—",
+                "Created": run.created_at[:10] if run.created_at else "—",
+            }
+            for run in complete_runs[:15]
+        ]
+        st.subheader("Recent stored runs")
+        st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
+        if only_with_results and not with_results:
+            st.caption("No runs with papers yet — all recent runs are empty or failed.")
 
 
 def _conference_scope_table(fund) -> pd.DataFrame:
@@ -119,8 +185,25 @@ def main() -> None:
                 )
         st.caption("Active sources: " + ", ".join(_active_integrations(settings)))
 
-        if complete_runs:
-            run_options = {_run_label(run): run.id for run in complete_runs}
+        only_with_results = st.checkbox(
+            "Only show runs with results",
+            value=st.session_state.get("only_runs_with_results", False),
+            help="Hide stored runs that completed with 0 papers.",
+        )
+        st.session_state.only_runs_with_results = only_with_results
+
+        display_runs = _runs_for_selector(complete_runs, only_with_results=only_with_results)
+        if only_with_results and not filter_runs_with_results(complete_runs) and complete_runs:
+            st.caption("No runs with papers yet — showing all complete runs.")
+
+        if display_runs:
+            if st.session_state.selected_run_id not in {run.id for run in display_runs}:
+                st.session_state.selected_run_id = pick_preferred_run_id(
+                    display_runs,
+                    current_id=None,
+                )
+
+            run_options = {_run_label(run): run.id for run in display_runs}
             labels = list(run_options.keys())
             current_id = st.session_state.selected_run_id
             default_index = 0
@@ -194,19 +277,20 @@ def main() -> None:
                 st.caption("Paper source applies only when a conference supports it; others use their default.")
 
             if st.button("Run pipeline & save", type="primary", disabled=not run_targets):
-                try:
-                    progress = st.progress(0.0, text="Starting pipeline run...")
-                    completed: list[str] = []
-                    last_run_id: str | None = None
+                progress = st.progress(0.0, text="Starting pipeline run...")
+                completed: list[str] = []
+                runs_with_data: list[str] = []
+                failures: list[tuple[str, str]] = []
 
-                    for index, run_conference in enumerate(run_targets, start=1):
-                        progress.progress(
-                            (index - 1) / len(run_targets),
-                            text=f"Running {run_conference} {int(run_year)} ({index}/{len(run_targets)})...",
-                        )
-                        entry = fund.conference(run_conference) if fund else None
-                        source = paper_source if entry and paper_source in entry.sources else None
-                        run, _ = execute_pipeline_run(
+                for index, run_conference in enumerate(run_targets, start=1):
+                    progress.progress(
+                        (index - 1) / len(run_targets),
+                        text=f"Running {run_conference} {int(run_year)} ({index}/{len(run_targets)})...",
+                    )
+                    entry = fund.conference(run_conference) if fund else None
+                    source = paper_source if entry and paper_source in entry.sources else None
+                    try:
+                        run, result = execute_pipeline_run(
                             conference=run_conference,
                             year=int(run_year),
                             paper_source=source,
@@ -214,21 +298,16 @@ def main() -> None:
                             settings=settings,
                         )
                         completed.append(run.id)
-                        last_run_id = run.id
+                        paper_count = run.paper_count or len(result.scoring.detection.papers)
+                        if paper_count > 0:
+                            runs_with_data.append(run.id)
+                    except Exception as exc:
+                        failures.append((run_conference, str(exc)))
 
-                    progress.progress(1.0, text=f"Finished {len(run_targets)} conference run(s).")
-                    st.session_state.selected_run_id = last_run_id
-                    if len(completed) > 1:
-                        st.success(
-                            "Saved runs: "
-                            + ", ".join(completed[:5])
-                            + ("…" if len(completed) > 5 else "")
-                        )
-                    load_pipeline.clear()
-                    clear_cache()
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Pipeline run failed: {exc}")
+                progress.progress(1.0, text=f"Finished {len(run_targets)} conference run(s).")
+
+                if not completed and failures:
+                    st.error(f"All pipeline runs failed: {failures[0][1]}")
                     st.info(
                         "OpenReview paper fetch failed (often **429 Too Many Requests** on profile lookups). "
                         "Affiliations are now resolved by **Perplexity** — ensure "
@@ -236,6 +315,36 @@ def main() -> None:
                         "If paper fetch still fails, wait a few minutes and retry, or increase:\n\n"
                         "`LAB2STARTUP_OPENREVIEW_REQUEST_DELAY=2.0`"
                     )
+                else:
+                    preferred_id = runs_with_data[0] if runs_with_data else completed[-1]
+                    st.session_state.selected_run_id = preferred_id
+                    if runs_with_data:
+                        st.session_state.only_runs_with_results = True
+                    if failures:
+                        failure_lines = []
+                        for name, msg in failures[:5]:
+                            short = msg if len(msg) <= 80 else msg[:77] + "..."
+                            failure_lines.append(f"{name} ({short})")
+                        st.warning(
+                            f"{len(failures)} run(s) failed: "
+                            + "; ".join(failure_lines)
+                            + ("…" if len(failures) > 5 else "")
+                        )
+                    if len(completed) > 1:
+                        st.success(
+                            f"Saved {len(completed)} run(s)"
+                            + (f", {len(runs_with_data)} with papers" if runs_with_data else "")
+                            + ". Viewing "
+                            + ("first run with data." if runs_with_data else "last completed run.")
+                        )
+                    elif completed:
+                        if runs_with_data:
+                            st.success("Run saved with paper data.")
+                        else:
+                            st.warning("Run saved but returned 0 papers.")
+                    load_pipeline.clear()
+                    clear_cache()
+                    st.rerun()
         else:
             st.caption(
                 "Development mode: refresh runs the live pipeline against mock JSON papers "
@@ -268,7 +377,15 @@ def main() -> None:
         return
 
     if not papers and not result.reports:
-        st.warning("No papers or candidates in the current dataset.")
+        active_run = next(
+            (run for run in complete_runs if run.id == st.session_state.selected_run_id),
+            None,
+        )
+        _render_empty_dataset_state(
+            active_run=active_run,
+            complete_runs=complete_runs,
+            only_with_results=st.session_state.get("only_runs_with_results", False),
+        )
         return
 
     conferences = sorted({paper.conference for paper in papers})

@@ -302,19 +302,33 @@ def execute_batch_pipeline_runs(
 ) -> list[tuple[PipelineRun, ReportResult]]:
     """Run the pipeline for multiple conferences sequentially."""
     results: list[tuple[PipelineRun, ReportResult]] = []
+    failures: list[tuple[str, str]] = []
     for conference in conferences:
         logger.info("Starting batch run for %s %s", conference, year)
-        run, result = execute_pipeline_run(
-            conference=conference,
-            year=year,
-            paper_source=paper_source,
-            fund_profile=fund_profile,
-            topics=topics,
-            db_path=db_path,
-            settings=settings,
-            include_clusters=include_clusters,
+        try:
+            run, result = execute_pipeline_run(
+                conference=conference,
+                year=year,
+                paper_source=paper_source,
+                fund_profile=fund_profile,
+                topics=topics,
+                db_path=db_path,
+                settings=settings,
+                include_clusters=include_clusters,
+            )
+            results.append((run, result))
+        except Exception as exc:
+            logger.exception("Batch run failed for %s %s", conference, year)
+            failures.append((conference, str(exc)))
+    if failures and not results:
+        failed = ", ".join(f"{name}: {msg}" for name, msg in failures[:3])
+        raise RuntimeError(f"All batch runs failed. {failed}") from None
+    if failures:
+        logger.warning(
+            "Batch completed with %s failure(s): %s",
+            len(failures),
+            ", ".join(name for name, _ in failures),
         )
-        results.append((run, result))
     return results
 
 
