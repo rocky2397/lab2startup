@@ -8,6 +8,61 @@ Start from academic conference data (papers and authors), extract researcher pro
 
 **Current status: Step 11–14 in progress** — SQLite run persistence, CLI orchestrator, production mode, dashboard run selector. See [PLAN.md](PLAN.md).
 
+## How to Use
+
+**You need a [Perplexity API key](https://www.perplexity.ai/settings/api)** for real founder signals and profile enrichment. Without it, production runs will fetch papers but produce little or no signal data.
+
+### 1. Install
+
+```bash
+cd lab2startup
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set at minimum:
+
+```bash
+LAB2STARTUP_MODE=production
+LAB2STARTUP_PERPLEXITY_API_KEY=your_key_here   # required
+```
+
+Perplexity is the **primary signal source** — it searches the web for founder/startup evidence and resolves researcher affiliations. See [Perplexity founder signal search](#perplexity-founder-signal-search-step-10e) for all options.
+
+### 3. Run a conference pipeline
+
+```bash
+# List conferences in the Backtrace fund scope
+python run_pipeline.py --list-conferences
+
+# Single conference (papers from OpenReview, signals from Perplexity)
+python run_pipeline.py --conference NeurIPS --year 2024
+
+# All high-priority conferences in one batch
+python run_pipeline.py --priority high --year 2024
+```
+
+Runs are saved to SQLite (`.cache/lab2startup.db` by default).
+
+### 4. Open the dashboard
+
+```bash
+python run_dashboard.py
+```
+
+Open the URL Streamlit prints (usually http://localhost:8501). Use the sidebar to pick a **Stored run**, filter candidates, and explore reports. Enable **Only show runs with results** to hide empty runs after batch jobs.
+
+### Quick dev mode (no API key)
+
+For tests and offline prototyping, leave `LAB2STARTUP_MODE=development` (default). The dashboard uses mock JSON papers and signals — no Perplexity key required.
+
 ## MVP Scope
 
 1. Ingest conference papers/authors from **OpenAlex** or local JSON
