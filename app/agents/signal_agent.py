@@ -101,8 +101,11 @@ class SignalDetectionResult:
 def _should_load_mock_signals(
     github_config=None,
     perplexity_config=None,
+    agentic_signal_config=None,
 ) -> bool:
     """Load mock JSON unless an enabled integration opts out of supplementing it."""
+    if agentic_signal_config is not None and agentic_signal_config.enabled:
+        return True
     for config in (github_config, perplexity_config):
         if config is not None and config.enabled and not config.supplement_mock_signals:
             return False
@@ -119,7 +122,12 @@ def detect_signals(
     semantic_scholar_config=None,
     github_config=None,
     perplexity_config=None,
+    agentic_signal_config=None,
     use_mock_signals: bool = True,
+    run_id: str | None = None,
+    conference: str = "Unknown",
+    year: int = 2024,
+    topic_scores: dict[str, int] | None = None,
 ) -> SignalDetectionResult:
     """Load profiles and attach commercialization signals."""
     profile_result = build_profiles(
@@ -131,13 +139,32 @@ def detect_signals(
     )
 
     raw_signals: list[Signal] = []
-    if use_mock_signals and _should_load_mock_signals(github_config, perplexity_config):
+    if use_mock_signals and _should_load_mock_signals(
+        github_config,
+        perplexity_config,
+        agentic_signal_config,
+    ):
         raw_signals = load_signals(signals_path)
 
     researchers = profile_result.researchers
 
-    # Perplexity resolves affiliations and founder signals in one web search per researcher.
-    if perplexity_config is not None and perplexity_config.enabled:
+    if agentic_signal_config is not None and agentic_signal_config.enabled:
+        from app.agents.signal_graph import run_agentic_signal_graph
+        from app.integrations.perplexity_agent import merge_agent_signals
+
+        effective_run_id = run_id or "agentic_detect_local"
+        researchers, agent_signals, _traces = run_agentic_signal_graph(
+            run_id=effective_run_id,
+            papers=profile_result.papers,
+            researchers=researchers,
+            clusters=profile_result.clusters,
+            config=agentic_signal_config,
+            conference=conference,
+            year=year,
+            topic_scores=topic_scores,
+        )
+        raw_signals = merge_agent_signals(raw_signals, agent_signals)
+    elif perplexity_config is not None and perplexity_config.enabled:
         from app.integrations.perplexity import (
             enrich_researchers_with_perplexity,
             merge_perplexity_signals,

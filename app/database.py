@@ -30,6 +30,53 @@ CREATE TABLE IF NOT EXISTS run_snapshots (
     snapshot_json TEXT NOT NULL,
     FOREIGN KEY (run_id) REFERENCES pipeline_runs(id)
 );
+
+CREATE TABLE IF NOT EXISTS agent_traces (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    researcher_id TEXT NOT NULL,
+    researcher_name TEXT NOT NULL,
+    tier TEXT NOT NULL,
+    max_steps INTEGER NOT NULL,
+    steps_used INTEGER,
+    preset TEXT,
+    model TEXT,
+    status TEXT NOT NULL,
+    tool_calls_count INTEGER DEFAULT 0,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    estimated_cost_usd REAL,
+    summary TEXT,
+    request_json TEXT,
+    response_json TEXT,
+    signals_emitted INTEGER DEFAULT 0,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES pipeline_runs(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_traces_run_id ON agent_traces(run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_traces_researcher_id ON agent_traces(researcher_id);
+
+CREATE TABLE IF NOT EXISTS researcher_history (
+    researcher_id TEXT PRIMARY KEY,
+    canonical_name TEXT NOT NULL,
+    last_run_id TEXT,
+    last_investigated_at TEXT,
+    last_conference TEXT,
+    last_year INTEGER,
+    last_tier TEXT,
+    last_signal_count INTEGER DEFAULT 0,
+    last_best_signal_type TEXT,
+    last_identity_confidence TEXT,
+    affiliation TEXT,
+    profile_url TEXT,
+    notes_json TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (last_run_id) REFERENCES pipeline_runs(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_researcher_history_name ON researcher_history(canonical_name);
 """
 
 

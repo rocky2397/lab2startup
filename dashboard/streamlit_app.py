@@ -34,7 +34,21 @@ from dashboard.filters import (
     recommendation_options,
     researcher_id_from_report_id,
 )
+from dashboard.agent_trace_ui import (
+    format_cost_caption,
+    render_researcher_trace_expander,
+    render_run_trace_summary,
+    run_uses_agentic_signals,
+)
+from dashboard.context_ui import (
+    format_conference_year_label,
+    infer_region_hint,
+    render_researcher_context_card,
+    render_run_context_header,
+    researcher_paper_context,
+)
 from dashboard.leaderboard_ui import render_top_prospects_board
+from dashboard.researcher_links_ui import render_researcher_profile_links
 from dashboard.scoring_ui import (
     render_candidate_score_breakdown_expander,
     render_scoring_methodology_expander,
@@ -53,8 +67,10 @@ def load_pipeline(force_refresh: bool = False, run_id: str | None = None):
 
 def _active_integrations(settings) -> list[str]:
     active: list[str] = []
-    if settings.perplexity_config.enabled:
-        active.append("Perplexity (primary)")
+    if settings.agentic_signal_config.enabled:
+        active.append("Agentic signals (LangGraph + Agent API)")
+    elif settings.perplexity_config.enabled:
+        active.append("Perplexity Sonar (one-shot)")
     if settings.openreview_config is not None and settings.openreview_config.enabled:
         active.append("OpenReview")
     if settings.semantic_scholar_config.enabled:
@@ -358,6 +374,8 @@ def main() -> None:
 
         if settings.perplexity_config.enabled and not settings.perplexity_config.api_key:
             st.error("Perplexity is enabled but LAB2STARTUP_PERPLEXITY_API_KEY is missing.")
+        if settings.agentic_signal_config.enabled and not settings.perplexity_config.api_key:
+            st.error("Agentic signals require LAB2STARTUP_PERPLEXITY_API_KEY.")
 
         st.divider()
         st.header("Filters")
@@ -398,10 +416,16 @@ def main() -> None:
     )
 
     if active_run:
-        st.caption(
-            f"Viewing stored run: **{active_run.conference} {active_run.year}** "
-            f"({active_run.paper_source})"
-        )
+        agentic_run = run_uses_agentic_signals(active_run.config_json)
+        if agentic_run:
+            from app.agent_trace_store import summarize_run_traces
+
+            trace_summary = summarize_run_traces(active_run.id, db_path=settings.db_path)
+            st.caption(
+                f"Signal mode: **Agentic (LangGraph)** · {format_cost_caption(trace_summary)}"
+            )
+        elif settings.agentic_signal_config.enabled:
+            st.caption("Current env enables agentic signals; this stored run used Sonar.")
 
     filter_ns = st.session_state.get("loaded_run_id") or "default"
 
@@ -455,6 +479,16 @@ def main() -> None:
         st.write(f"Papers: {len(papers)}")
         st.write(f"Researchers: {len(detection.researchers)}")
         st.write(f"Signals: {len(detection.signals)}")
+
+    render_run_context_header(
+        active_run=active_run,
+        papers=papers,
+        researcher_count=len(detection.researchers),
+        signal_count=len(detection.signals),
+        conference_filter=conference_filter,
+        year_filter=year_filter,
+        topic_filter=topic_filter,
+    )
 
     if view_mode == "Researchers":
         filtered_reports = filter_researcher_reports(
@@ -541,6 +575,9 @@ def main() -> None:
             detection=detection,
             fund=fund,
             topic_scores=settings.topic_scores,
+            run_id=st.session_state.selected_run_id,
+            db_path=settings.db_path,
+            config_json=active_run.config_json if active_run else {},
         )
 
 
@@ -551,6 +588,9 @@ def _render_explore_tab(
     detection,
     fund,
     topic_scores,
+    run_id: str | None,
+    db_path,
+    config_json: dict,
 ) -> None:
     if "selected_report_id" in st.session_state:
         preferred = st.session_state.selected_report_id
@@ -581,8 +621,11 @@ def _render_explore_tab(
         ),
     )
 
-    table_rows = [
-        {
+    table_rows = []
+    papers_by_id = {paper.id: paper for paper in papers}
+    researchers_by_id = {researcher.id: researcher for researcher in detection.researchers}
+    for report in filtered_reports:
+        row = {
             "Name": report.researcher_or_cluster,
             "Score": report.startup_likelihood_score,
             "Priority": report.priority_band.value.replace("_", " ").title(),
@@ -590,9 +633,25 @@ def _render_explore_tab(
             "Signals": len(report.signals),
             "Report ID": report.id,
         }
-        for report in filtered_reports
-    ]
+        if view_mode == "Researchers":
+            researcher_id = researcher_id_from_report_id(report.id)
+            researcher = researchers_by_id.get(researcher_id) if researcher_id else None
+            if researcher:
+                ctx = researcher_paper_context(researcher, papers_by_id)
+                row["Conference / year"] = format_conference_year_label(
+                    ctx["conferences"],  # type: ignore[arg-type]
+                    ctx["years"],  # type: ignore[arg-type]
+                )
+                row["Affiliation"] = researcher.affiliation
+                row["Region"] = infer_region_hint(researcher.affiliation) or "—"
+        table_rows.append(row)
     st.subheader("Ranked candidates")
+    if run_id:
+        render_run_trace_summary(
+            run_id,
+            db_path=db_path,
+            agentic_enabled=run_uses_agentic_signals(config_json),
+        )
     st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
 
     report_ids = [report.id for report in filtered_reports]
@@ -610,6 +669,25 @@ def _render_explore_tab(
     selected_report = next(
         report for report in filtered_reports if report.id == selected_report_id
     )
+
+    if view_mode == "Researchers":
+        researcher_id = researcher_id_from_report_id(selected_report.id)
+        if researcher_id:
+            researcher = next(
+                (r for r in detection.researchers if r.id == researcher_id),
+                None,
+            )
+            if researcher:
+                papers_by_id = {paper.id: paper for paper in papers}
+                render_researcher_context_card(
+                    researcher=researcher,
+                    report=selected_report,
+                    papers_by_id=papers_by_id,
+                )
+                render_researcher_profile_links(
+                    researcher,
+                    selected_report.signals,
+                )
 
     detail_col1, detail_col2, detail_col3 = st.columns(3)
     detail_col1.metric("Score", selected_report.startup_likelihood_score)
@@ -634,8 +712,11 @@ def _render_explore_tab(
                 researcher = next(
                     r for r in detection.researchers if r.id == researcher_id
                 )
-                st.markdown("**Profile**")
+                st.markdown("**Profile details**")
+                region = infer_region_hint(researcher.affiliation)
                 st.write(f"Affiliation: {researcher.affiliation}")
+                if region:
+                    st.write(f"Region: {region}")
                 st.write(f"Role: {researcher.role}")
                 st.write(f"Identity confidence: {researcher.identity_confidence.value}")
                 st.write(f"Signals attached: {len(selected_report.signals)}")
@@ -655,6 +736,15 @@ def _render_explore_tab(
     )
     render_candidate_score_breakdown_expander(selected_report)
     render_signal_sources_expander(selected_report.signals)
+    if view_mode == "Researchers" and run_id:
+        researcher_id = researcher_id_from_report_id(selected_report.id)
+        if researcher_id:
+            render_researcher_trace_expander(
+                researcher_id,
+                run_id,
+                db_path=db_path,
+                agentic_enabled=run_uses_agentic_signals(config_json),
+            )
 
 
 if __name__ == "__main__":

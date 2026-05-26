@@ -12,6 +12,7 @@ os.environ["LAB2STARTUP_PAPER_SOURCE"] = "json"
 os.environ["LAB2STARTUP_MODE"] = "development"
 os.environ["LAB2STARTUP_USE_MOCK_SIGNALS"] = "true"
 os.environ["LAB2STARTUP_PIPELINE_CACHE_ENABLED"] = "false"
+os.environ["LAB2STARTUP_AGENTIC_SIGNALS"] = "false"
 
 from app.config import clear_settings_cache
 from app.service import clear_cache

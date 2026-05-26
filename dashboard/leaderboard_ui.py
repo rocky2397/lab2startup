@@ -13,6 +13,12 @@ from dashboard.leaderboard import (
     leaderboard_dataframe,
     take_meeting_reports,
 )
+from dashboard.context_ui import (
+    format_conference_year_label,
+    infer_region_hint,
+    researcher_paper_context,
+)
+from dashboard.researcher_links_ui import render_researcher_profile_links
 
 
 def _recommendation_badge(recommendation: VCAction) -> str:
@@ -40,7 +46,11 @@ def render_top_prospect_cards(entries: list[LeaderboardEntry], *, columns: int =
                 st.markdown(f"### {medal} #{entry.rank} {entry.report.researcher_or_cluster}")
                 st.metric("Startup score", entry.report.startup_likelihood_score)
                 affiliation = entry.researcher.affiliation if entry.researcher else "Unknown"
-                st.caption(f"{affiliation} · {entry.top_signal_label}")
+                region = entry.region or infer_region_hint(affiliation)
+                region_label = f" · {region}" if region else ""
+                st.caption(
+                    f"{entry.conference_year} · {affiliation}{region_label} · {entry.top_signal_label}"
+                )
                 st.write(_recommendation_badge(entry.report.recommendation))
 
 
@@ -127,12 +137,34 @@ def render_top_prospects_board(
         f"({selected.report.startup_likelihood_score}/100)",
         expanded=False,
     ):
-        st.write(
-            f"**Recommendation:** {RECOMMENDATION_LABELS[selected.report.recommendation]}  \n"
-            f"**Affiliation:** {selected.researcher.affiliation if selected.researcher else 'Unknown'}  \n"
-            f"**Role:** {selected.researcher.role if selected.researcher else 'Unknown'}  \n"
-            f"**Signals:** {len(selected.report.signals)}"
-        )
+        if selected.researcher:
+            ctx = researcher_paper_context(
+                selected.researcher,
+                {paper.id: paper for paper in papers},
+            )
+            cy = format_conference_year_label(
+                ctx["conferences"],  # type: ignore[arg-type]
+                ctx["years"],  # type: ignore[arg-type]
+            )
+            region = infer_region_hint(selected.researcher.affiliation)
+            st.write(
+                f"**Recommendation:** {RECOMMENDATION_LABELS[selected.report.recommendation]}  \n"
+                f"**Conference / year:** {cy}  \n"
+                f"**Affiliation:** {selected.researcher.affiliation}  \n"
+                f"**Region:** {region or 'Unknown'}  \n"
+                f"**Role:** {selected.researcher.role}  \n"
+                f"**Signals:** {len(selected.report.signals)}"
+            )
+            render_researcher_profile_links(
+                selected.researcher,
+                selected.report.signals,
+                label="Links",
+            )
+        else:
+            st.write(
+                f"**Recommendation:** {RECOMMENDATION_LABELS[selected.report.recommendation]}  \n"
+                f"**Signals:** {len(selected.report.signals)}"
+            )
         if selected.report.signals:
             for signal in selected.report.signals[:3]:
                 st.markdown(

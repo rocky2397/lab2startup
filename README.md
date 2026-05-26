@@ -344,6 +344,63 @@ python -m app.integrations.perplexity \
   --paper-title "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering"
 ```
 
+## Agentic signal pipeline (LangGraph + Perplexity Agent API)
+
+When `LAB2STARTUP_AGENTIC_SIGNALS=true`, the signal stage uses a **LangGraph coordinator** that ranks researchers, assigns investigation tiers (light / standard / deep), and calls the **Perplexity Agent API** (`POST /v1/agent`) with built-in tools plus custom functions (`github_repo_search`, `lookup_prior_run`). Full investigation traces are stored in SQLite for dashboard review.
+
+See [PLAN_AGENTIC.md](PLAN_AGENTIC.md) for architecture and rollout details.
+
+### Enable agentic mode
+
+```bash
+export LAB2STARTUP_AGENTIC_SIGNALS=true
+export LAB2STARTUP_PERPLEXITY_API_KEY=your_key_here
+export LAB2STARTUP_AGENTIC_MAX_CALLS=10
+export LAB2STARTUP_AGENTIC_EARLY_EXIT=true
+
+python run_pipeline.py --conference NeurIPS --year 2024
+python run_dashboard.py
+```
+
+In the dashboard, agentic runs show **Signal mode: Agentic (LangGraph)** with investigation count, token totals, and estimated cost. On the **Explore & details** tab, expand **Investigation trace** per candidate to see the step timeline and download raw JSON.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LAB2STARTUP_AGENTIC_SIGNALS` | `false` | Enable LangGraph + Agent API path |
+| `LAB2STARTUP_AGENTIC_MAX_CALLS` | `10` | Max Agent API investigations per run |
+| `LAB2STARTUP_AGENTIC_MAX_TOTAL_STEPS` | `40` | Global step budget across all investigations |
+| `LAB2STARTUP_AGENTIC_EARLY_EXIT` | `true` | Stop queue on high-confidence founder evidence |
+| `LAB2STARTUP_AGENTIC_DEEP_SLOTS` | `3` | Top N researchers get deep tier |
+| `LAB2STARTUP_AGENTIC_STANDARD_SLOTS` | `7` | Next N get standard tier |
+| `LAB2STARTUP_AGENTIC_PREFILTER_MIN_SCORE` | `20` | Skip researchers below prefilter score |
+| `LAB2STARTUP_AGENTIC_MODEL` | — | Override model (else use tier preset) |
+| `LAB2STARTUP_AGENTIC_PRESET_STANDARD` | `pro-search` | Preset for standard tier |
+| `LAB2STARTUP_AGENTIC_PRESET_DEEP` | `deep-research` | Preset for deep tier |
+| `LAB2STARTUP_AGENTIC_REQUEST_DELAY` | `1.5` | Delay between investigations (seconds) |
+
+When agentic mode is on, `LAB2STARTUP_PERPLEXITY_MAX_RESEARCHERS` is ignored for call count (use `LAB2STARTUP_AGENTIC_MAX_CALLS` instead). The Sonar one-shot path remains unchanged when `LAB2STARTUP_AGENTIC_SIGNALS=false`.
+
+### CLI — probe a single researcher (Agent API)
+
+```bash
+python -m app.integrations.perplexity_agent \
+  --name "John Yang" \
+  --affiliation "Stanford University" \
+  --paper-title "SWE-agent" \
+  --tier deep
+```
+
+Tiers map to presets and step caps: `light` (1 step), `standard` (3), `deep` (8). Output is JSON with status, signals, token usage, and estimated cost.
+
+### Manual live smoke test
+
+```bash
+export LAB2STARTUP_PERPLEXITY_API_KEY=...
+pytest tests/test_agentic_live.py -k live_agent_probe -s
+```
+
+This test is skipped in CI (`@pytest.mark.skip`).
+
 ## How to Run / Test (Step 10e)
 
 ### Dashboard (recommended)

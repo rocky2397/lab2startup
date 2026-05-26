@@ -127,6 +127,8 @@ class Researcher(BaseModel):
     openreview_profile_id: str | None = None
     openreview_url: str | None = None
     github_username: str | None = None
+    linkedin_url: str | None = None
+    profile_url: str | None = None
 
 
 class Signal(BaseModel):

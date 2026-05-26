@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.agents.ingestion_agent import make_researcher_id
+from app.researcher_links import normalize_github_profile_url, normalize_linkedin_profile_url
 from app.models import (
     EvidenceStrength,
     IdentityConfidence,
@@ -41,6 +42,8 @@ SIGNAL_RESPONSE_SCHEMA: dict[str, Any] = {
                     "enum": ["high", "medium", "low"],
                 },
                 "profile_url": {"type": "string"},
+                "linkedin_url": {"type": "string"},
+                "github_url": {"type": "string"},
                 "identity_explanation": {"type": "string"},
             },
             "required": [
@@ -278,6 +281,19 @@ def parse_perplexity_profile(
     confidence = _map_identity_confidence(str(profile.get("identity_confidence", "medium")))
     explanation = str(profile.get("identity_explanation") or "").strip()
     profile_url = _pick_source_url(str(profile.get("profile_url") or ""), citations)
+    linkedin_url = normalize_linkedin_profile_url(str(profile.get("linkedin_url") or ""))
+    if linkedin_url is None:
+        for candidate in (profile_url, *citations):
+            linkedin_url = normalize_linkedin_profile_url(str(candidate or ""))
+            if linkedin_url:
+                break
+
+    github_url = normalize_github_profile_url(str(profile.get("github_url") or ""))
+    if github_url is None:
+        for candidate in (profile_url, *citations):
+            github_url = normalize_github_profile_url(str(candidate or ""))
+            if github_url:
+                break
 
     updates: dict[str, Any] = {
         "identity_confidence": confidence,
@@ -297,6 +313,14 @@ def parse_perplexity_profile(
         updates["openreview_url"] = profile_url
         if profile_id:
             updates["openreview_profile_id"] = profile_id
+    elif profile_url:
+        updates["profile_url"] = profile_url
+
+    if linkedin_url:
+        updates["linkedin_url"] = linkedin_url
+    if github_url:
+        login = github_url.rstrip("/").rsplit("/", 1)[-1]
+        updates["github_username"] = login
 
     return researcher.model_copy(update=updates)
 
@@ -307,6 +331,7 @@ def parse_perplexity_signals(
     researcher: Researcher,
     citations: list[str],
     max_signals: int,
+    signal_id_prefix: str = "perplexity",
 ) -> list[Signal]:
     """Convert a Perplexity JSON payload into Signal objects."""
     raw_signals = payload.get("signals") or []
@@ -332,7 +357,7 @@ def parse_perplexity_signals(
         if source_url is None:
             continue
 
-        signal_id = f"perplexity_{slug}_{index + 1}"
+        signal_id = f"{signal_id_prefix}_{slug}_{index + 1}"
         signals.append(
             Signal(
                 id=signal_id,

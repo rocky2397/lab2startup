@@ -418,10 +418,7 @@ def enrich_papers_with_openreview(
 
     venue_id = venue_id_for_conference(config.conference, config.year)
 
-    with OpenReviewClient(
-        request_delay_seconds=config.request_delay_seconds,
-        max_retries=config.max_retries,
-    ) as client:
+    with OpenReviewClient(request_delay_seconds=config.request_delay_seconds) as client:
         notes = client.iter_submission_notes(
             venue_id=venue_id,
             accepted_only=config.accepted_only,

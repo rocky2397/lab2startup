@@ -1,0 +1,12 @@
+{
+  "id": "resp_requires_action",
+  "status": "requires_action",
+  "output": [
+    {
+      "type": "function_call",
+      "call_id": "call_github_1",
+      "name": "github_repo_search",
+      "arguments": "{\"query\": \"SWE-agent\", \"min_stars\": 5}"
+    }
+  ]
+}

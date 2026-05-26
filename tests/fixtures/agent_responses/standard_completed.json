@@ -1,0 +1,35 @@
+{
+  "id": "resp_agent_test",
+  "status": "completed",
+  "model": "openai/gpt-5.1",
+  "max_steps": 3,
+  "output": [
+    {
+      "type": "search_results",
+      "results": [
+        {
+          "url": "https://john-b-yang.github.io/",
+          "title": "John Yang"
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "{\"profile\": {\"affiliation\": \"Stanford University\", \"role\": \"PhD Student\", \"identity_confidence\": \"high\", \"profile_url\": \"https://john-b-yang.github.io/\", \"identity_explanation\": \"Personal site lists Stanford affiliation.\"}, \"signals\": [{\"signal_type\": \"possible_founder\", \"description\": \"Building SWE-agent related projects.\", \"source_url\": \"https://john-b-yang.github.io/\", \"evidence_strength\": \"medium\"}]}"
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 50,
+    "cost": {
+      "total_cost": 0.05
+    }
+  }
+}

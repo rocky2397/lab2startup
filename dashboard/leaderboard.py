@@ -9,6 +9,11 @@ import pandas as pd
 from app.models import Paper, Report, Researcher, SignalType, VCAction
 from app.report_generator import RECOMMENDATION_LABELS
 from dashboard.filters import filter_researcher_reports, researcher_id_from_report_id
+from dashboard.context_ui import (
+    format_conference_year_label,
+    infer_region_hint,
+    researcher_paper_context,
+)
 
 
 @dataclass(frozen=True)
@@ -20,6 +25,8 @@ class LeaderboardEntry:
     researcher: Researcher | None
     top_signal_label: str
     top_signal_url: str | None
+    conference_year: str = "—"
+    region: str | None = None
 
 
 def _top_signal_summary(report: Report) -> tuple[str, str | None]:
@@ -65,12 +72,22 @@ def build_leaderboard_entries(
         topic=topic,
     )
     researchers_by_id = {researcher.id: researcher for researcher in researchers}
+    papers_by_id = {paper.id: paper for paper in papers}
 
     entries: list[LeaderboardEntry] = []
     for index, report in enumerate(ranked[:top_n], start=1):
         researcher_id = researcher_id_from_report_id(report.id)
         researcher = researchers_by_id.get(researcher_id) if researcher_id else None
         signal_label, signal_url = _top_signal_summary(report)
+        conference_year = "—"
+        region = None
+        if researcher:
+            ctx = researcher_paper_context(researcher, papers_by_id)
+            conference_year = format_conference_year_label(
+                ctx["conferences"],  # type: ignore[arg-type]
+                ctx["years"],  # type: ignore[arg-type]
+            )
+            region = infer_region_hint(researcher.affiliation)
         entries.append(
             LeaderboardEntry(
                 rank=index,
@@ -78,6 +95,8 @@ def build_leaderboard_entries(
                 researcher=researcher,
                 top_signal_label=signal_label,
                 top_signal_url=signal_url,
+                conference_year=conference_year,
+                region=region,
             )
         )
     return entries
@@ -93,9 +112,11 @@ def leaderboard_dataframe(entries: list[LeaderboardEntry]) -> pd.DataFrame:
                 "Rank": entry.rank,
                 "Name": entry.report.researcher_or_cluster,
                 "Score": entry.report.startup_likelihood_score,
-                "Recommendation": RECOMMENDATION_LABELS[entry.report.recommendation],
+                "Conference / year": entry.conference_year,
                 "Affiliation": researcher.affiliation if researcher else "—",
+                "Region": entry.region or "—",
                 "Role": researcher.role if researcher else "—",
+                "Recommendation": RECOMMENDATION_LABELS[entry.report.recommendation],
                 "Signals": len(entry.report.signals),
                 "Top signal": entry.top_signal_label,
                 "Report ID": entry.report.id,

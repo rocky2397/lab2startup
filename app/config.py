@@ -24,6 +24,30 @@ from app.schemas import DEFAULT_PAPERS_PATH, DEFAULT_SIGNALS_PATH
 
 
 @dataclass(frozen=True)
+class AgenticSignalConfig:
+    """Parameters for LangGraph + Perplexity Agent API signal detection."""
+
+    enabled: bool = False
+    api_key: str | None = None
+    max_agent_calls: int = 10
+    max_total_steps: int = 40
+    early_exit: bool = True
+    deep_slots: int = 3
+    standard_slots: int = 7
+    prefilter_min_score: float = 20.0
+    queue_reserve: int = 5
+    model: str | None = None
+    preset_standard: str = "pro-search"
+    preset_deep: str = "deep-research"
+    max_signals_per_researcher: int = 2
+    enrich_profiles: bool = True
+    request_delay_seconds: float = 1.5
+    fund_context: str | None = None
+    db_path: Path | None = None
+    github_config: GitHubConfig | None = None
+
+
+@dataclass(frozen=True)
 class AppSettings:
     """Runtime settings for data sources and pipeline inputs."""
 
@@ -41,6 +65,7 @@ class AppSettings:
     semantic_scholar_config: SemanticScholarConfig
     github_config: GitHubConfig
     perplexity_config: PerplexityConfig
+    agentic_signal_config: AgenticSignalConfig
     pipeline_cache_enabled: bool
     pipeline_cache_dir: Path
     pipeline_cache_ttl_hours: float
@@ -185,12 +210,14 @@ def get_settings() -> AppSettings:
         request_delay_seconds=float(os.getenv("LAB2STARTUP_GITHUB_REQUEST_DELAY", "0.5")),
     )
 
+    perplexity_api_key = os.getenv("LAB2STARTUP_PERPLEXITY_API_KEY") or None
+
     perplexity_config = PerplexityConfig(
         enabled=_parse_bool(
             os.getenv("LAB2STARTUP_PERPLEXITY_ENABLED"),
             default=True,
         ),
-        api_key=os.getenv("LAB2STARTUP_PERPLEXITY_API_KEY") or None,
+        api_key=perplexity_api_key,
         model=os.getenv("LAB2STARTUP_PERPLEXITY_MODEL", "sonar-pro"),
         max_researchers=int(os.getenv("LAB2STARTUP_PERPLEXITY_MAX_RESEARCHERS", "10")),
         max_signals_per_researcher=int(
@@ -207,6 +234,28 @@ def get_settings() -> AppSettings:
         max_workers=int(os.getenv("LAB2STARTUP_PERPLEXITY_MAX_WORKERS", "3")),
         fund_context=fund_context,
         enrich_profiles=_parse_bool(os.getenv("LAB2STARTUP_PERPLEXITY_ENRICH_PROFILES"), True),
+    )
+
+    agentic_signal_config = AgenticSignalConfig(
+        enabled=_parse_bool(os.getenv("LAB2STARTUP_AGENTIC_SIGNALS"), default=False),
+        api_key=perplexity_api_key,
+        max_agent_calls=int(os.getenv("LAB2STARTUP_AGENTIC_MAX_CALLS", "10")),
+        max_total_steps=int(os.getenv("LAB2STARTUP_AGENTIC_MAX_TOTAL_STEPS", "40")),
+        early_exit=_parse_bool(os.getenv("LAB2STARTUP_AGENTIC_EARLY_EXIT"), default=True),
+        deep_slots=int(os.getenv("LAB2STARTUP_AGENTIC_DEEP_SLOTS", "3")),
+        standard_slots=int(os.getenv("LAB2STARTUP_AGENTIC_STANDARD_SLOTS", "7")),
+        prefilter_min_score=float(os.getenv("LAB2STARTUP_AGENTIC_PREFILTER_MIN_SCORE", "20")),
+        model=os.getenv("LAB2STARTUP_AGENTIC_MODEL") or None,
+        preset_standard=os.getenv("LAB2STARTUP_AGENTIC_PRESET_STANDARD", "pro-search"),
+        preset_deep=os.getenv("LAB2STARTUP_AGENTIC_PRESET_DEEP", "deep-research"),
+        max_signals_per_researcher=int(
+            os.getenv("LAB2STARTUP_PERPLEXITY_MAX_SIGNALS_PER_RESEARCHER", "2")
+        ),
+        enrich_profiles=_parse_bool(os.getenv("LAB2STARTUP_PERPLEXITY_ENRICH_PROFILES"), True),
+        request_delay_seconds=float(os.getenv("LAB2STARTUP_AGENTIC_REQUEST_DELAY", "1.5")),
+        fund_context=fund_context,
+        db_path=db_path,
+        github_config=github_config,
     )
 
     from app.pipeline_cache import DEFAULT_CACHE_DIR
@@ -230,6 +279,7 @@ def get_settings() -> AppSettings:
         semantic_scholar_config=semantic_scholar_config,
         github_config=github_config,
         perplexity_config=perplexity_config,
+        agentic_signal_config=agentic_signal_config,
         pipeline_cache_enabled=_parse_bool(
             os.getenv("LAB2STARTUP_PIPELINE_CACHE_ENABLED"),
             default=True,

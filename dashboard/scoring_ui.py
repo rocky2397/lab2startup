@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.models import Signal, SignalType
+from dashboard.agent_trace_ui import signal_source_label
 
 if TYPE_CHECKING:
     from app.fund_profiles import FundProfile
@@ -94,8 +95,9 @@ def _format_signal_points(signal: Signal) -> str:
 
 def _signal_expander_label(signal: Signal, index: int) -> str:
     signal_label = signal.signal_type.value.replace("_", " ").title()
+    source = signal_source_label(signal.id)
     host = signal.source_url.split("/")[2] if "://" in signal.source_url else signal.source_url
-    return f"{index}. {signal_label} — {host}"
+    return f"{index}. [{source}] {signal_label} — {host}"
 
 
 def render_scoring_methodology_expander(
@@ -194,13 +196,14 @@ def render_signal_sources_expander(signals: list[Signal]) -> None:
             return
 
         st.caption(
-            "Each signal comes from Perplexity web search (or optional GitHub/mock sources). "
-            "Expand a row to see the full description and source link."
+            "Signal sources: **agent** (LangGraph investigation), **perplexity** (Sonar), "
+            "**github**, or **mock**. Expand a row for the full description and source link."
         )
 
         for index, signal in enumerate(signals, start=1):
             with st.expander(_signal_expander_label(signal, index), expanded=False):
                 st.markdown(
+                    f"**Source:** {signal_source_label(signal.id)}  \n"
                     f"**Type:** {signal.signal_type.value.replace('_', ' ').title()}  \n"
                     f"**Evidence strength:** {signal.evidence_strength.value}  \n"
                     f"**Scoring weight:** {_format_signal_points(signal)}"

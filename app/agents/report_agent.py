@@ -102,8 +102,12 @@ def run_reports(
     semantic_scholar_config=None,
     github_config=None,
     perplexity_config=None,
+    agentic_signal_config=None,
     use_mock_signals: bool = True,
     topic_scores: dict[str, int] | None = None,
+    run_id: str | None = None,
+    conference: str = "Unknown",
+    year: int = 2024,
     min_score: int = 0,
     include_clusters: bool = True,
 ) -> ReportResult:
@@ -117,8 +121,12 @@ def run_reports(
         semantic_scholar_config=semantic_scholar_config,
         github_config=github_config,
         perplexity_config=perplexity_config,
+        agentic_signal_config=agentic_signal_config,
         use_mock_signals=use_mock_signals,
         topic_scores=topic_scores,
+        run_id=run_id,
+        conference=conference,
+        year=year,
     )
     reports = generate_reports(
         scoring,

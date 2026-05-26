@@ -80,8 +80,12 @@ def run_scoring(
     semantic_scholar_config=None,
     github_config=None,
     perplexity_config=None,
+    agentic_signal_config=None,
     use_mock_signals: bool = True,
     topic_scores: dict[str, int] | None = None,
+    run_id: str | None = None,
+    conference: str = "Unknown",
+    year: int = 2024,
 ) -> ScoringResult:
     """Run the full pipeline through scoring."""
     detection = detect_signals(
@@ -93,7 +97,12 @@ def run_scoring(
         semantic_scholar_config=semantic_scholar_config,
         github_config=github_config,
         perplexity_config=perplexity_config,
+        agentic_signal_config=agentic_signal_config,
         use_mock_signals=use_mock_signals,
+        run_id=run_id,
+        conference=conference,
+        year=year,
+        topic_scores=topic_scores,
     )
     return compute_scores(detection, topic_scores=topic_scores)
 

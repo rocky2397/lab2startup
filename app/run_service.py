@@ -17,6 +17,7 @@ from app.fund_profiles import (
 from app.integrations.github import GitHubConfig
 from app.integrations.openalex import OpenAlexFetchConfig
 from app.integrations.openreview import OpenReviewConfig
+from app.config import AgenticSignalConfig
 from app.integrations.perplexity import PerplexityConfig
 from app.integrations.semantic_scholar import SemanticScholarConfig
 from app.models import Paper, PipelineRun, RunStatus
@@ -44,6 +45,17 @@ def _resolve_fund(
 
         return load_fund_profile(fund_profile)
     return settings.fund_profile
+
+
+def _agentic_config_record(config: AgenticSignalConfig) -> dict[str, object]:
+    return {
+        "enabled": config.enabled,
+        "max_agent_calls": config.max_agent_calls,
+        "max_total_steps": config.max_total_steps,
+        "early_exit": config.early_exit,
+        "deep_slots": config.deep_slots,
+        "standard_slots": config.standard_slots,
+    }
 
 
 def _redact_integration_config(config: object) -> dict[str, object]:
@@ -115,6 +127,7 @@ def build_run_configs(
         "semantic_scholar_config": settings.semantic_scholar_config,
         "github_config": settings.github_config,
         "perplexity_config": perplexity_config,
+        "agentic_signal_config": settings.agentic_signal_config,
         "use_mock_signals": settings.use_mock_signals,
         "topic_scores": settings.topic_scores,
         "papers_path": settings.papers_path,
@@ -226,6 +239,9 @@ def execute_pipeline_run(
             ),
             "github": _redact_integration_config(configs["github_config"]),  # type: ignore[arg-type]
             "perplexity": _redact_integration_config(configs["perplexity_config"]),  # type: ignore[arg-type]
+            "agentic_signals": _agentic_config_record(
+                configs["agentic_signal_config"]  # type: ignore[arg-type]
+            ),
         },
     }
 
@@ -260,6 +276,10 @@ def execute_pipeline_run(
             settings=settings,
         )
 
+        agentic_config: AgenticSignalConfig = configs["agentic_signal_config"]  # type: ignore[assignment]
+        if agentic_config.enabled:
+            agentic_config = replace(agentic_config, db_path=Path(db_path))
+
         result = run_reports(
             papers_path=papers_path,
             signals_path=signals_path,
@@ -269,11 +289,20 @@ def execute_pipeline_run(
             semantic_scholar_config=configs["semantic_scholar_config"],  # type: ignore[arg-type]
             github_config=configs["github_config"],  # type: ignore[arg-type]
             perplexity_config=configs["perplexity_config"],  # type: ignore[arg-type]
+            agentic_signal_config=agentic_config,
             use_mock_signals=bool(configs["use_mock_signals"]),
             topic_scores=configs["topic_scores"],  # type: ignore[arg-type]
+            run_id=run_id,
+            conference=conference,
+            year=year,
             include_clusters=include_clusters,
         )
         save_run_snapshot(run_id, result, db_path=db_path)
+        if agentic_config.enabled:
+            from app.agent_trace_store import summarize_run_traces
+
+            trace_summary = summarize_run_traces(run_id, db_path=db_path)
+            logger.info("Agentic trace summary for %s: %s", run_id, trace_summary)
         logger.info(
             "Run complete: %s papers, %s researchers, %s signals, %s reports",
             len(result.scoring.detection.papers),
