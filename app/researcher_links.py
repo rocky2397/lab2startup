@@ -98,14 +98,8 @@ def resolve_researcher_links(
     signals = signals or []
     signal_github, signal_linkedin = _scan_signal_urls(signals)
 
-    github = (
-        normalize_github_profile_url(researcher.github_username)
-        or signal_github
-    )
-    linkedin = (
-        normalize_linkedin_profile_url(researcher.linkedin_url)
-        or signal_linkedin
-    )
+    github = normalize_github_profile_url(researcher.github_username) or signal_github
+    linkedin = normalize_linkedin_profile_url(researcher.linkedin_url) or signal_linkedin
 
     website = _website_from_profile_url(getattr(researcher, "profile_url", None))
     if website is None and researcher.openreview_url:

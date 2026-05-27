@@ -25,11 +25,7 @@ def test_build_clusters_creates_one_team_per_paper() -> None:
     clusters = build_clusters(ingestion.researchers, ingestion.papers)
 
     assert len(clusters) == 7
-    swe_cluster = next(
-        cluster
-        for cluster in clusters
-        if "researcher_john_yang" in cluster.researchers
-    )
+    swe_cluster = next(cluster for cluster in clusters if "researcher_john_yang" in cluster.researchers)
     assert len(swe_cluster.researchers) == 7
     assert swe_cluster.shared_papers == ["paper_001"]
     assert swe_cluster.topic == "AI agents"

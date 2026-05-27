@@ -1,0 +1,20 @@
+{
+  "id": "resp_completed_with_function_call",
+  "status": "completed",
+  "max_steps": 3,
+  "output": [
+    {
+      "type": "function_call",
+      "call_id": "call_lookup_1",
+      "name": "lookup_prior_run",
+      "arguments": "{\"researcher_name\": \"John Yang\", \"researcher_id\": \"researcher_john_yang\"}"
+    }
+  ],
+  "usage": {
+    "input_tokens": 50,
+    "output_tokens": 10,
+    "cost": {
+      "total_cost": 0.01
+    }
+  }
+}

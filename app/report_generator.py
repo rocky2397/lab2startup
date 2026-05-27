@@ -16,7 +16,6 @@ from app.models import (
 )
 from app.scoring import EntityScore
 
-
 PRIORITY_LABELS = {
     PriorityBand.HIGH_PRIORITY: "High priority",
     PriorityBand.MONITOR_CLOSELY: "Monitor closely",
@@ -60,15 +59,16 @@ def _build_open_questions(
     questions: list[str] = []
 
     if researcher and researcher.identity_confidence != IdentityConfidence.HIGH:
-        questions.append(
-            "Verify identity match: "
-            + researcher.identity_confidence_explanation
-        )
+        questions.append("Verify identity match: " + researcher.identity_confidence_explanation)
 
     if not signals:
-        questions.append("No public commercialization signals found yet. Monitor for new project pages or founder announcements.")
+        questions.append(
+            "No public commercialization signals found yet. Monitor for new project pages or founder announcements."
+        )
     elif all(signal.signal_type == SignalType.NO_SIGNAL for signal in signals):
-        questions.append("Public activity appears academic-only. Confirm whether any stealth startup involvement exists.")
+        questions.append(
+            "Public activity appears academic-only. Confirm whether any stealth startup involvement exists."
+        )
 
     if entity_score.score_breakdown.commercialization_signal_strength < 10:
         questions.append("What is the clearest path from recent research to a product or company?")
@@ -215,8 +215,7 @@ def render_signals_markdown(signals: list[Signal]) -> str:
     for signal in signals:
         label = SIGNAL_TYPE_LABELS[signal.signal_type]
         lines.append(
-            f"- **{label}** ({signal.evidence_strength.value}): {signal.description} "
-            f"[Source]({signal.source_url})"
+            f"- **{label}** ({signal.evidence_strength.value}): {signal.description} [Source]({signal.source_url})"
         )
     return "\n".join(lines)
 

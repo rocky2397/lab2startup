@@ -6,7 +6,7 @@ import re
 
 import streamlit as st
 
-from app.models import Paper, PipelineRun, Researcher, Report
+from app.models import Paper, PipelineRun, Report, Researcher
 
 _COUNTRY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(united states|usa|u\.s\.a\.|u\.s\.)\b", re.I), "United States"),
@@ -18,7 +18,13 @@ _COUNTRY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(netherlands|holland)\b", re.I), "Netherlands"),
     (re.compile(r"\b(israel)\b", re.I), "Israel"),
     (re.compile(r"\b(singapore)\b", re.I), "Singapore"),
-    (re.compile(r"\b(china|beijing|shanghai|shenzhen)\b", re.I), "China"),
+    (
+        re.compile(
+            r"\b(china|beijing|shanghai|shenzhen|harbin|tsinghua|peking|zhejiang|hangzhou|guangzhou|heilongjiang)\b",
+            re.I,
+        ),
+        "China",
+    ),
     (re.compile(r"\b(japan|tokyo)\b", re.I), "Japan"),
     (re.compile(r"\b(south korea|korea|seoul)\b", re.I), "South Korea"),
     (re.compile(r"\b(india|bangalore|bengaluru)\b", re.I), "India"),
@@ -76,11 +82,7 @@ def researcher_paper_context(
     papers_by_id: dict[str, Paper],
 ) -> dict[str, object]:
     """Summarize conference/year/topic coverage for one researcher in the current run."""
-    researcher_papers = [
-        papers_by_id[paper_id]
-        for paper_id in researcher.papers
-        if paper_id in papers_by_id
-    ]
+    researcher_papers = [papers_by_id[paper_id] for paper_id in researcher.papers if paper_id in papers_by_id]
     conferences = sorted({paper.conference for paper in researcher_papers})
     years = sorted({paper.year for paper in researcher_papers}, reverse=True)
     topics = sorted({paper.topic for paper in researcher_papers})

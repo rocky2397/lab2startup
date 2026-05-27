@@ -133,9 +133,7 @@ def ingest_papers(
 ) -> IngestionResult:
     """Load papers from JSON or external sources and extract researcher profiles."""
     if papers is None:
-        fetch_openreview = (
-            openreview_config is not None and openreview_config.fetch_as_source
-        )
+        fetch_openreview = openreview_config is not None and openreview_config.fetch_as_source
         papers = resolve_papers(
             path,
             openalex_config=openalex_config,
@@ -162,9 +160,7 @@ def ingest_papers(
 
 def summarize_ingestion(result: IngestionResult) -> dict[str, object]:
     """Return quick stats for inspecting ingestion output."""
-    confidence_counts = Counter(
-        researcher.identity_confidence.value for researcher in result.researchers
-    )
+    confidence_counts = Counter(researcher.identity_confidence.value for researcher in result.researchers)
     return {
         "paper_count": result.paper_count,
         "researcher_count": result.researcher_count,

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field, computed_field
 
 
-class SignalType(str, Enum):
+class SignalType(StrEnum):
     """Public commercialization signal categories."""
 
     CONFIRMED_FOUNDER = "confirmed_founder"
@@ -17,7 +17,7 @@ class SignalType(str, Enum):
     NO_SIGNAL = "no_signal"
 
 
-class EvidenceStrength(str, Enum):
+class EvidenceStrength(StrEnum):
     """How strongly a signal supports a commercialization hypothesis."""
 
     HIGH = "high"
@@ -25,7 +25,7 @@ class EvidenceStrength(str, Enum):
     LOW = "low"
 
 
-class IdentityConfidence(str, Enum):
+class IdentityConfidence(StrEnum):
     """Confidence that a public profile matches the intended researcher."""
 
     HIGH = "high"
@@ -33,7 +33,7 @@ class IdentityConfidence(str, Enum):
     LOW = "low"
 
 
-class PriorityBand(str, Enum):
+class PriorityBand(StrEnum):
     """Startup likelihood classification bands."""
 
     HIGH_PRIORITY = "high_priority"
@@ -42,7 +42,7 @@ class PriorityBand(str, Enum):
     LOW_PRIORITY = "low_priority"
 
 
-class VCAction(str, Enum):
+class VCAction(StrEnum):
     """Recommended next step for a VC analyst."""
 
     TAKE_MEETING = "take_meeting"
@@ -51,7 +51,7 @@ class VCAction(str, Enum):
     IGNORE_FOR_NOW = "ignore_for_now"
 
 
-class RunStatus(str, Enum):
+class RunStatus(StrEnum):
     """Lifecycle status for a persisted pipeline run."""
 
     PENDING = "pending"

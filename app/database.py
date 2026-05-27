@@ -77,6 +77,13 @@ CREATE TABLE IF NOT EXISTS researcher_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_researcher_history_name ON researcher_history(canonical_name);
+
+CREATE TABLE IF NOT EXISTS run_enrichment_audits (
+    run_id TEXT PRIMARY KEY,
+    audit_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES pipeline_runs(id)
+);
 """
 
 

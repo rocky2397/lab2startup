@@ -8,11 +8,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from app.models import (
-    Cluster,
     Paper,
     PriorityBand,
     Report,
-    Researcher,
     ScoreBreakdown,
     Signal,
     VCAction,

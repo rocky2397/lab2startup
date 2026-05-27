@@ -6,7 +6,7 @@ import hashlib
 import json
 import pickle
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -83,7 +83,7 @@ def load_cached_report_result(
         return None
 
     created_at = datetime.fromisoformat(meta["created_at"])
-    age_hours = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
+    age_hours = (datetime.now(UTC) - created_at).total_seconds() / 3600
     if age_hours > ttl_hours:
         return None
 
@@ -109,7 +109,7 @@ def save_cached_report_result(
         json.dumps(
             {
                 "fingerprint": build_pipeline_fingerprint(settings),
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
                 "result_type": type(result).__name__,
             },
             indent=2,
@@ -158,7 +158,7 @@ def cache_status(
             "message": "Cache metadata unreadable.",
         }
 
-    age_hours = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
+    age_hours = (datetime.now(UTC) - created_at).total_seconds() / 3600
     valid = meta.get("fingerprint") == fingerprint and age_hours <= ttl_hours
     return {
         "enabled": ttl_hours > 0,

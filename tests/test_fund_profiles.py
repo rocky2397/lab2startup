@@ -68,16 +68,22 @@ def test_validate_conference_for_fund(backtrace) -> None:
 
 
 def test_resolve_paper_source_for_fund(backtrace) -> None:
-    assert resolve_paper_source_for_fund(
-        conference="NeurIPS",
-        fund=backtrace,
-        requested_source=None,
-    ) == "openreview"
-    assert resolve_paper_source_for_fund(
-        conference="MLSys",
-        fund=backtrace,
-        requested_source=None,
-    ) == "openalex"
+    assert (
+        resolve_paper_source_for_fund(
+            conference="NeurIPS",
+            fund=backtrace,
+            requested_source=None,
+        )
+        == "openreview"
+    )
+    assert (
+        resolve_paper_source_for_fund(
+            conference="MLSys",
+            fund=backtrace,
+            requested_source=None,
+        )
+        == "openalex"
+    )
 
     with pytest.raises(ValueError, match="not supported"):
         resolve_paper_source_for_fund(

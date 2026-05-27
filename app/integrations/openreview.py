@@ -8,13 +8,13 @@ import logging
 import re
 import time
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from app.integrations.openalex import TOPIC_KEYWORD_RULES, infer_topic
+from app.integrations.openalex import infer_topic
 from app.models import IdentityConfidence, Paper, PaperAuthor, Researcher
 
 logger = logging.getLogger(__name__)
@@ -490,9 +490,7 @@ def _merge_authors(
         merged.append(
             author.model_copy(
                 update={
-                    "affiliation": match.affiliation
-                    if match.affiliation != "Unknown"
-                    else author.affiliation,
+                    "affiliation": match.affiliation if match.affiliation != "Unknown" else author.affiliation,
                     "role": match.role if match.role != "Researcher" else author.role,
                     "openreview_profile_id": match.openreview_profile_id,
                 }
@@ -527,10 +525,7 @@ def sync_researchers_with_openreview(
             role = author.role
 
         confidence = IdentityConfidence.HIGH
-        explanation = (
-            f"Linked to OpenReview profile {author.openreview_profile_id} "
-            f"with affiliation '{affiliation}'."
-        )
+        explanation = f"Linked to OpenReview profile {author.openreview_profile_id} with affiliation '{affiliation}'."
 
         updated.append(
             researcher.model_copy(
@@ -557,9 +552,7 @@ def summarize_openreview(
         "paper_count": len(papers),
         "papers_with_openreview_id": sum(1 for paper in papers if paper.openreview_id),
         "researcher_count": len(researchers),
-        "researchers_with_openreview_profile": sum(
-            1 for researcher in researchers if researcher.openreview_profile_id
-        ),
+        "researchers_with_openreview_profile": sum(1 for researcher in researchers if researcher.openreview_profile_id),
         "sample_links": [
             {
                 "name": researcher.name,

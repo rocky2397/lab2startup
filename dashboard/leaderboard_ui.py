@@ -6,17 +6,17 @@ import streamlit as st
 
 from app.models import VCAction
 from app.report_generator import RECOMMENDATION_LABELS
+from dashboard.context_ui import (
+    format_conference_year_label,
+    infer_region_hint,
+    researcher_paper_context,
+)
 from dashboard.leaderboard import (
     LeaderboardEntry,
     build_leaderboard_entries,
     count_by_recommendation,
     leaderboard_dataframe,
     take_meeting_reports,
-)
-from dashboard.context_ui import (
-    format_conference_year_label,
-    infer_region_hint,
-    researcher_paper_context,
 )
 from dashboard.researcher_links_ui import render_researcher_profile_links
 
@@ -48,9 +48,7 @@ def render_top_prospect_cards(entries: list[LeaderboardEntry], *, columns: int =
                 affiliation = entry.researcher.affiliation if entry.researcher else "Unknown"
                 region = entry.region or infer_region_hint(affiliation)
                 region_label = f" · {region}" if region else ""
-                st.caption(
-                    f"{entry.conference_year} · {affiliation}{region_label} · {entry.top_signal_label}"
-                )
+                st.caption(f"{entry.conference_year} · {affiliation}{region_label} · {entry.top_signal_label}")
                 st.write(_recommendation_badge(entry.report.recommendation))
 
 
@@ -85,9 +83,7 @@ def render_top_prospects_board(
         st.warning("No researcher scores available for this run.")
         return None
 
-    all_researcher_reports = [
-        report for report in reports if report.id.startswith("report_researcher_")
-    ]
+    all_researcher_reports = [report for report in reports if report.id.startswith("report_researcher_")]
     rec_counts = count_by_recommendation(all_researcher_reports)
     metric_cols = st.columns(4)
     metric_cols[0].metric("Take meeting", rec_counts.get("Take meeting", 0))
@@ -124,17 +120,14 @@ def render_top_prospects_board(
         "Open candidate profile",
         report_ids,
         format_func=lambda report_id: next(
-            entry.report.researcher_or_cluster
-            for entry in entries
-            if entry.report.id == report_id
+            entry.report.researcher_or_cluster for entry in entries if entry.report.id == report_id
         ),
         key="top_prospect_select",
     )
 
     selected = next(entry for entry in entries if entry.report.id == selected_report_id)
     with st.expander(
-        f"Quick view — {selected.report.researcher_or_cluster} "
-        f"({selected.report.startup_likelihood_score}/100)",
+        f"Quick view — {selected.report.researcher_or_cluster} ({selected.report.startup_likelihood_score}/100)",
         expanded=False,
     ):
         if selected.researcher:

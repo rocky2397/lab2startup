@@ -15,7 +15,6 @@ from urllib.parse import urlparse
 import httpx
 
 from app.agents.ingestion_agent import make_researcher_id
-from app.researcher_links import normalize_github_profile_url, normalize_linkedin_profile_url
 from app.models import (
     EvidenceStrength,
     IdentityConfidence,
@@ -24,6 +23,7 @@ from app.models import (
     Signal,
     SignalType,
 )
+from app.researcher_links import normalize_github_profile_url, normalize_linkedin_profile_url
 
 PERPLEXITY_API_BASE = "https://api.perplexity.ai"
 DEFAULT_MODEL = "sonar-pro"
@@ -98,7 +98,7 @@ class PerplexityConfig:
     enabled: bool = True
     api_key: str | None = None
     model: str = DEFAULT_MODEL
-    max_researchers: int = 10
+    max_researchers: int = 0  # 0 = investigate all researchers in the run
     max_signals_per_researcher: int = 2
     min_identity_confidence: IdentityConfidence = IdentityConfidence.HIGH
     supplement_mock_signals: bool = False
@@ -174,8 +174,7 @@ def build_researcher_context(
 def build_founder_search_prompt(context: dict[str, Any]) -> str:
     """Create the user prompt for Perplexity web search."""
     paper_lines = [
-        f"- {paper['title']} ({paper['conference']}, topic: {paper['topic']})"
-        for paper in context.get("papers") or []
+        f"- {paper['title']} ({paper['conference']}, topic: {paper['topic']})" for paper in context.get("papers") or []
     ]
     paper_block = "\n".join(paper_lines) if paper_lines else "- No paper titles available."
 
@@ -303,9 +302,7 @@ def parse_perplexity_profile(
 
     if affiliation and affiliation.lower() != "unknown":
         updates["affiliation"] = affiliation[:200]
-    if role and role.lower() != "researcher":
-        updates["role"] = role[:120]
-    elif role:
+    if role and role.lower() != "researcher" or role:
         updates["role"] = role[:120]
 
     if profile_url and "openreview.net/profile" in profile_url.lower():
@@ -364,9 +361,7 @@ def parse_perplexity_signals(
                 signal_type=signal_type,
                 description=description[:500],
                 source_url=source_url,
-                evidence_strength=_map_evidence_strength(
-                    str(item.get("evidence_strength", "medium"))
-                ),
+                evidence_strength=_map_evidence_strength(str(item.get("evidence_strength", "medium"))),
                 date_found=date.today(),
                 researcher_name=researcher.name,
             )
@@ -450,8 +445,10 @@ def _target_researchers_for_perplexity(
     researchers: list[Researcher],
     config: PerplexityConfig,
 ) -> list[Researcher]:
-    """Select top researchers by paper count for Perplexity enrichment."""
+    """Select researchers for Perplexity enrichment (all when max_researchers <= 0)."""
     ranked = sorted(researchers, key=lambda researcher: (-len(researcher.papers), researcher.name))
+    if config.max_researchers <= 0:
+        return ranked
     return ranked[: config.max_researchers]
 
 
@@ -576,17 +573,11 @@ def merge_perplexity_signals(
 
 def summarize_perplexity_signals(signals: list[Signal]) -> dict[str, object]:
     """Return quick stats for Perplexity signal detection."""
-    perplexity_signals = [
-        signal for signal in signals if signal.id.startswith("perplexity_")
-    ]
+    perplexity_signals = [signal for signal in signals if signal.id.startswith("perplexity_")]
     return {
         "perplexity_signal_count": len(perplexity_signals),
         "researchers_with_perplexity_signals": len(
-            {
-                signal.researcher_name
-                for signal in perplexity_signals
-                if signal.researcher_name
-            }
+            {signal.researcher_name for signal in perplexity_signals if signal.researcher_name}
         ),
         "sample_signals": [
             {
@@ -602,9 +593,7 @@ def summarize_perplexity_signals(signals: list[Signal]) -> dict[str, object]:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Search Perplexity for founder signals on a researcher."
-    )
+    parser = argparse.ArgumentParser(description="Search Perplexity for founder signals on a researcher.")
     parser.add_argument("--name", required=True)
     parser.add_argument("--affiliation", default="Unknown")
     parser.add_argument("--role", default="Researcher")

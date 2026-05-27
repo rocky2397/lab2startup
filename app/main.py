@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.models import Cluster, Paper, Report, Researcher, Signal
+from app.models import Cluster, Paper, Researcher, Signal
 from app.report_generator import render_report_markdown
 from app.schemas import (
     EntityScoreResponse,
@@ -79,9 +79,7 @@ def list_researchers(
 
     if affiliation:
         researchers = [
-            researcher
-            for researcher in researchers
-            if affiliation.lower() in researcher.affiliation.lower()
+            researcher for researcher in researchers if affiliation.lower() in researcher.affiliation.lower()
         ]
 
     if topic:
@@ -120,9 +118,7 @@ def list_signals(
     signals = get_report_result().scoring.detection.signals
 
     if signal_type:
-        signals = [
-            signal for signal in signals if signal.signal_type.value == signal_type
-        ]
+        signals = [signal for signal in signals if signal.signal_type.value == signal_type]
     if researcher_id:
         signals = [signal for signal in signals if signal.researcher_id == researcher_id]
 
@@ -134,9 +130,7 @@ def list_scores() -> ScoresResponse:
     """List startup likelihood scores for researchers and clusters."""
     scoring = get_report_result().scoring
     return ScoresResponse(
-        researchers=[
-            entity_score_to_response(score) for score in scoring.ranked_researchers
-        ],
+        researchers=[entity_score_to_response(score) for score in scoring.ranked_researchers],
         clusters=[entity_score_to_response(score) for score in scoring.ranked_clusters],
     )
 
@@ -163,15 +157,9 @@ def list_reports(
     if min_score:
         summaries = [summary for summary in summaries if summary.startup_likelihood_score >= min_score]
     if recommendation:
-        summaries = [
-            summary
-            for summary in summaries
-            if summary.recommendation.value == recommendation
-        ]
+        summaries = [summary for summary in summaries if summary.recommendation.value == recommendation]
 
-    summaries.sort(
-        key=lambda summary: (-summary.startup_likelihood_score, summary.researcher_or_cluster)
-    )
+    summaries.sort(key=lambda summary: (-summary.startup_likelihood_score, summary.researcher_or_cluster))
     return summaries
 
 

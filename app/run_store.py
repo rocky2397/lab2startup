@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from app.agents.report_agent import ReportResult
 from app.agents.scoring_agent import ScoringResult
 from app.agents.signal_agent import SignalDetectionResult
 from app.database import get_connection, init_db
+from app.enrichment_audit import (
+    EnrichmentAudit,
+    deserialize_enrichment_audit,
+    serialize_enrichment_audit,
+)
 from app.models import (
     Cluster,
     Paper,
@@ -24,12 +30,12 @@ from app.scoring import EntityScore
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def make_run_id(*, conference: str, year: int, created_at: datetime | None = None) -> str:
     """Build a stable, human-readable run identifier."""
-    moment = created_at or datetime.now(timezone.utc)
+    moment = created_at or datetime.now(UTC)
     slug = re.sub(r"[^a-z0-9]+", "_", conference.lower()).strip("_") or "conference"
     stamp = moment.strftime("%Y%m%dT%H%M%S")
     return f"run_{year}_{slug}_{stamp}"
@@ -67,17 +73,11 @@ def serialize_report_result(result: ReportResult) -> str:
     payload = {
         "reports": [report.model_dump(mode="json") for report in result.reports],
         "scoring": {
-            "researcher_scores": [
-                _entity_score_to_dict(score) for score in result.scoring.researcher_scores
-            ],
-            "cluster_scores": [
-                _entity_score_to_dict(score) for score in result.scoring.cluster_scores
-            ],
+            "researcher_scores": [_entity_score_to_dict(score) for score in result.scoring.researcher_scores],
+            "cluster_scores": [_entity_score_to_dict(score) for score in result.scoring.cluster_scores],
             "detection": {
                 "papers": [paper.model_dump(mode="json") for paper in detection.papers],
-                "researchers": [
-                    researcher.model_dump(mode="json") for researcher in detection.researchers
-                ],
+                "researchers": [researcher.model_dump(mode="json") for researcher in detection.researchers],
                 "clusters": [cluster.model_dump(mode="json") for cluster in detection.clusters],
                 "signals": [signal.model_dump(mode="json") for signal in detection.signals],
                 "unmatched_researcher_names": detection.unmatched_researcher_names,
@@ -93,21 +93,15 @@ def deserialize_report_result(payload: str | dict[str, Any]) -> ReportResult:
     detection_data = data["scoring"]["detection"]
     detection = SignalDetectionResult(
         papers=[Paper.model_validate(item) for item in detection_data["papers"]],
-        researchers=[
-            Researcher.model_validate(item) for item in detection_data["researchers"]
-        ],
+        researchers=[Researcher.model_validate(item) for item in detection_data["researchers"]],
         clusters=[Cluster.model_validate(item) for item in detection_data["clusters"]],
         signals=[Signal.model_validate(item) for item in detection_data["signals"]],
         unmatched_researcher_names=detection_data.get("unmatched_researcher_names", []),
     )
     scoring = ScoringResult(
         detection=detection,
-        researcher_scores=[
-            _entity_score_from_dict(item) for item in data["scoring"]["researcher_scores"]
-        ],
-        cluster_scores=[
-            _entity_score_from_dict(item) for item in data["scoring"]["cluster_scores"]
-        ],
+        researcher_scores=[_entity_score_from_dict(item) for item in data["scoring"]["researcher_scores"]],
+        cluster_scores=[_entity_score_from_dict(item) for item in data["scoring"]["cluster_scores"]],
     )
     reports = [Report.model_validate(item) for item in data["reports"]]
     return ReportResult(scoring=scoring, reports=reports)
@@ -225,6 +219,45 @@ def save_run_snapshot(
             ),
         )
         connection.commit()
+
+
+def save_enrichment_audit(
+    run_id: str,
+    audit: EnrichmentAudit,
+    *,
+    db_path: str | Path | None = None,
+) -> None:
+    """Persist enrichment verification data for a pipeline run."""
+    init_db(db_path)
+    created_at = audit.created_at or _utc_now_iso()
+    with get_connection(db_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO run_enrichment_audits (run_id, audit_json, created_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(run_id) DO UPDATE SET
+                audit_json = excluded.audit_json,
+                created_at = excluded.created_at
+            """,
+            (run_id, serialize_enrichment_audit(audit), created_at),
+        )
+        connection.commit()
+
+
+def load_enrichment_audit(
+    run_id: str,
+    *,
+    db_path: str | Path | None = None,
+) -> EnrichmentAudit | None:
+    init_db(db_path)
+    with get_connection(db_path) as connection:
+        row = connection.execute(
+            "SELECT audit_json FROM run_enrichment_audits WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return deserialize_enrichment_audit(row["audit_json"])
 
 
 def mark_run_failed(

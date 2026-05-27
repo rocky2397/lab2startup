@@ -7,7 +7,7 @@ import json
 import re
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -97,7 +97,7 @@ def _is_recent(pushed_at: str | None) -> bool:
     if not pushed_at:
         return False
     pushed = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
-    age_days = (datetime.now(timezone.utc) - pushed).days
+    age_days = (datetime.now(UTC) - pushed).days
     return age_days <= RECENT_ACTIVITY_DAYS
 
 
@@ -149,8 +149,7 @@ def repo_to_signal(
     strength = _evidence_strength(repo)
 
     signal_description = (
-        f"GitHub repository '{full_name}' ({stars} stars) appears related to "
-        f"'{paper.title}'. {description}"
+        f"GitHub repository '{full_name}' ({stars} stars) appears related to '{paper.title}'. {description}"
     )
 
     owner = repo.get("owner") or {}
@@ -288,9 +287,7 @@ def detect_github_signals(
                     if researcher is None:
                         continue
 
-                    signals.append(
-                        repo_to_signal(repo, researcher=researcher, paper=paper)
-                    )
+                    signals.append(repo_to_signal(repo, researcher=researcher, paper=paper))
                     seen_repo_urls.add(repo_url)
                     matched += 1
                     if matched >= config.max_repos_per_paper:

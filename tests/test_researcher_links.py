@@ -17,10 +17,7 @@ def test_normalize_github_from_username() -> None:
 
 
 def test_normalize_github_from_repo_url() -> None:
-    assert (
-        normalize_github_profile_url("https://github.com/SWE-agent/SWE-agent")
-        == "https://github.com/SWE-agent"
-    )
+    assert normalize_github_profile_url("https://github.com/SWE-agent/SWE-agent") == "https://github.com/SWE-agent"
 
 
 def test_normalize_linkedin_from_profile_url() -> None:

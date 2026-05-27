@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.agents.signal_agent import SignalDetectionResult, detect_signals
-from app.models import Cluster
 from app.scoring import EntityScore, rank_entity_scores, score_cluster, score_researcher
 
 
@@ -40,8 +39,7 @@ def compute_scores(
     """Score all researchers and clusters from a signal detection result."""
     papers_by_id = {paper.id: paper for paper in detection.papers}
     signals_by_researcher = {
-        researcher.id: detection.signals_for_researcher(researcher.id)
-        for researcher in detection.researchers
+        researcher.id: detection.signals_for_researcher(researcher.id) for researcher in detection.researchers
     }
 
     researcher_scores = [
@@ -55,9 +53,7 @@ def compute_scores(
     ]
     researcher_score_map = {score.entity_id: score for score in researcher_scores}
 
-    cluster_scores = [
-        score_cluster(cluster, researcher_score_map) for cluster in detection.clusters
-    ]
+    cluster_scores = [score_cluster(cluster, researcher_score_map) for cluster in detection.clusters]
 
     # Attach score to cluster objects for downstream report/API use.
     for cluster, cluster_score in zip(detection.clusters, cluster_scores, strict=True):
@@ -122,7 +118,5 @@ def summarize_scoring(result: ScoringResult) -> dict[str, object]:
         "researcher_count": len(result.researcher_scores),
         "cluster_count": len(result.cluster_scores),
         "top_researchers": top_researchers,
-        "top_researcher_score": result.top_researcher.startup_likelihood_score
-        if result.top_researcher
-        else None,
+        "top_researcher_score": result.top_researcher.startup_likelihood_score if result.top_researcher else None,
     }

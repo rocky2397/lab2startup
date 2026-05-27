@@ -41,15 +41,9 @@ def filter_researcher_reports(
             continue
 
         researcher = researchers_by_id[researcher_id]
-        researcher_papers = [
-            papers_by_id[paper_id]
-            for paper_id in researcher.papers
-            if paper_id in papers_by_id
-        ]
+        researcher_papers = [papers_by_id[paper_id] for paper_id in researcher.papers if paper_id in papers_by_id]
 
-        if conference and not any(
-            paper.conference.lower() == conference.lower() for paper in researcher_papers
-        ):
+        if conference and not any(paper.conference.lower() == conference.lower() for paper in researcher_papers):
             continue
         if year is not None and not any(paper.year == year for paper in researcher_papers):
             continue
@@ -117,8 +111,7 @@ def count_researcher_reports(
     return sum(
         1
         for report in reports
-        if report.id.startswith("report_researcher_")
-        and report.startup_likelihood_score >= min_score
+        if report.id.startswith("report_researcher_") and report.startup_likelihood_score >= min_score
     )
 
 
@@ -134,9 +127,7 @@ def diagnose_filter_miss(
     topic: str | None = None,
 ) -> dict[str, int | str | None]:
     """Explain why sidebar filters may hide all candidates."""
-    researcher_reports = [
-        report for report in reports if report.id.startswith("report_researcher_")
-    ]
+    researcher_reports = [report for report in reports if report.id.startswith("report_researcher_")]
     total = len(researcher_reports)
     above_min = count_researcher_reports(reports, min_score=min_score)
 

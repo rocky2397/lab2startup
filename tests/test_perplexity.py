@@ -10,6 +10,7 @@ import pytest
 from app.integrations.perplexity import (
     PerplexityClient,
     PerplexityConfig,
+    _target_researchers_for_perplexity,
     build_founder_search_prompt,
     build_researcher_context,
     detect_perplexity_signals,
@@ -35,6 +36,19 @@ RESPONSE_FIXTURE = FIXTURES_DIR / "perplexity_founder_response.json"
 @pytest.fixture
 def perplexity_response() -> dict:
     return json.loads(RESPONSE_FIXTURE.read_text(encoding="utf-8"))
+
+
+def test_target_researchers_for_perplexity_respects_cap() -> None:
+    researchers = [
+        Researcher(id="a", name="Ada", affiliation="MIT", role="Researcher", papers=["p1", "p2"]),
+        Researcher(id="b", name="Bob", affiliation="MIT", role="Researcher", papers=["p1"]),
+        Researcher(id="c", name="Carol", affiliation="MIT", role="Researcher", papers=[]),
+    ]
+    capped = _target_researchers_for_perplexity(researchers, PerplexityConfig(max_researchers=2))
+    assert [researcher.id for researcher in capped] == ["a", "b"]
+
+    all_researchers = _target_researchers_for_perplexity(researchers, PerplexityConfig(max_researchers=0))
+    assert [researcher.id for researcher in all_researchers] == ["a", "b", "c"]
 
 
 def test_build_researcher_context() -> None:

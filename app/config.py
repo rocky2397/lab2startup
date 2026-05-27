@@ -7,11 +7,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from app.integrations.github import GitHubConfig
-from app.integrations.perplexity import PerplexityConfig
-from app.integrations.openalex import OpenAlexFetchConfig
-from app.integrations.openreview import OpenReviewConfig
-from app.integrations.semantic_scholar import SemanticScholarConfig
 from app.database import DEFAULT_DB_PATH
 from app.fund_profiles import (
     DEFAULT_FUND_ID,
@@ -19,6 +14,11 @@ from app.fund_profiles import (
     applied_topic_scores_for_fund,
     load_fund_profile,
 )
+from app.integrations.github import GitHubConfig
+from app.integrations.openalex import OpenAlexFetchConfig
+from app.integrations.openreview import OpenReviewConfig
+from app.integrations.perplexity import PerplexityConfig
+from app.integrations.semantic_scholar import SemanticScholarConfig
 from app.models import IdentityConfidence
 from app.schemas import DEFAULT_PAPERS_PATH, DEFAULT_SIGNALS_PATH
 
@@ -139,6 +139,13 @@ def _build_openreview_config(*, fetch_as_source: bool) -> OpenReviewConfig | Non
     )
 
 
+def _parse_max_researchers(raw: str | None) -> int:
+    """Parse Perplexity cap; 0 or unset means investigate all researchers."""
+    if raw is None or not str(raw).strip():
+        return 0
+    return max(0, int(raw.strip()))
+
+
 def _parse_identity_confidence(raw: str | None) -> IdentityConfidence:
     if raw is None:
         return IdentityConfidence.LOW
@@ -219,13 +226,9 @@ def get_settings() -> AppSettings:
         ),
         api_key=perplexity_api_key,
         model=os.getenv("LAB2STARTUP_PERPLEXITY_MODEL", "sonar-pro"),
-        max_researchers=int(os.getenv("LAB2STARTUP_PERPLEXITY_MAX_RESEARCHERS", "10")),
-        max_signals_per_researcher=int(
-            os.getenv("LAB2STARTUP_PERPLEXITY_MAX_SIGNALS_PER_RESEARCHER", "2")
-        ),
-        min_identity_confidence=_parse_identity_confidence(
-            os.getenv("LAB2STARTUP_PERPLEXITY_MIN_IDENTITY")
-        ),
+        max_researchers=_parse_max_researchers(os.getenv("LAB2STARTUP_PERPLEXITY_MAX_RESEARCHERS")),
+        max_signals_per_researcher=int(os.getenv("LAB2STARTUP_PERPLEXITY_MAX_SIGNALS_PER_RESEARCHER", "2")),
+        min_identity_confidence=_parse_identity_confidence(os.getenv("LAB2STARTUP_PERPLEXITY_MIN_IDENTITY")),
         supplement_mock_signals=_parse_bool(
             os.getenv("LAB2STARTUP_PERPLEXITY_SUPPLEMENT_MOCK"),
             default=False,
@@ -239,8 +242,8 @@ def get_settings() -> AppSettings:
     agentic_signal_config = AgenticSignalConfig(
         enabled=_parse_bool(os.getenv("LAB2STARTUP_AGENTIC_SIGNALS"), default=False),
         api_key=perplexity_api_key,
-        max_agent_calls=int(os.getenv("LAB2STARTUP_AGENTIC_MAX_CALLS", "10")),
-        max_total_steps=int(os.getenv("LAB2STARTUP_AGENTIC_MAX_TOTAL_STEPS", "40")),
+        max_agent_calls=_parse_max_researchers(os.getenv("LAB2STARTUP_AGENTIC_MAX_CALLS")),
+        max_total_steps=_parse_max_researchers(os.getenv("LAB2STARTUP_AGENTIC_MAX_TOTAL_STEPS", "40")),
         early_exit=_parse_bool(os.getenv("LAB2STARTUP_AGENTIC_EARLY_EXIT"), default=True),
         deep_slots=int(os.getenv("LAB2STARTUP_AGENTIC_DEEP_SLOTS", "3")),
         standard_slots=int(os.getenv("LAB2STARTUP_AGENTIC_STANDARD_SLOTS", "7")),
@@ -248,9 +251,7 @@ def get_settings() -> AppSettings:
         model=os.getenv("LAB2STARTUP_AGENTIC_MODEL") or None,
         preset_standard=os.getenv("LAB2STARTUP_AGENTIC_PRESET_STANDARD", "pro-search"),
         preset_deep=os.getenv("LAB2STARTUP_AGENTIC_PRESET_DEEP", "deep-research"),
-        max_signals_per_researcher=int(
-            os.getenv("LAB2STARTUP_PERPLEXITY_MAX_SIGNALS_PER_RESEARCHER", "2")
-        ),
+        max_signals_per_researcher=int(os.getenv("LAB2STARTUP_PERPLEXITY_MAX_SIGNALS_PER_RESEARCHER", "2")),
         enrich_profiles=_parse_bool(os.getenv("LAB2STARTUP_PERPLEXITY_ENRICH_PROFILES"), True),
         request_delay_seconds=float(os.getenv("LAB2STARTUP_AGENTIC_REQUEST_DELAY", "1.5")),
         fund_context=fund_context,
@@ -260,9 +261,7 @@ def get_settings() -> AppSettings:
 
     from app.pipeline_cache import DEFAULT_CACHE_DIR
 
-    pipeline_cache_dir = Path(
-        os.getenv("LAB2STARTUP_PIPELINE_CACHE_DIR", str(DEFAULT_CACHE_DIR))
-    )
+    pipeline_cache_dir = Path(os.getenv("LAB2STARTUP_PIPELINE_CACHE_DIR", str(DEFAULT_CACHE_DIR)))
 
     return AppSettings(
         mode=mode,
@@ -285,9 +284,7 @@ def get_settings() -> AppSettings:
             default=True,
         ),
         pipeline_cache_dir=pipeline_cache_dir,
-        pipeline_cache_ttl_hours=float(
-            os.getenv("LAB2STARTUP_PIPELINE_CACHE_TTL_HOURS", "168")
-        ),
+        pipeline_cache_ttl_hours=float(os.getenv("LAB2STARTUP_PIPELINE_CACHE_TTL_HOURS", "168")),
     )
 
 

@@ -6,7 +6,7 @@ import argparse
 import json
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -20,8 +20,7 @@ DEFAULT_USER_AGENT = "Lab2Startup/0.1 (mailto:research@example.com)"
 PAPER_BATCH_SIZE = 50
 AUTHOR_BATCH_SIZE = 100
 PAPER_FIELDS = (
-    "paperId,externalIds,title,citationCount,influentialCitationCount,"
-    "referenceCount,authors.authorId,authors.name"
+    "paperId,externalIds,title,citationCount,influentialCitationCount,referenceCount,authors.authorId,authors.name"
 )
 AUTHOR_FIELDS = "authorId,name,citationCount,hIndex,paperCount,affiliations"
 
@@ -165,11 +164,7 @@ def _merge_paper_authors(
             merged.append(author)
             continue
 
-        merged.append(
-            author.model_copy(
-                update={"semantic_scholar_id": s2_match.get("authorId")}
-            )
-        )
+        merged.append(author.model_copy(update={"semantic_scholar_id": s2_match.get("authorId")}))
     return merged
 
 
@@ -210,11 +205,7 @@ def _build_paper_lookup(
     metadata_rows: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     lookup: dict[str, dict[str, Any]] = {}
-    title_index = {
-        row.get("title", "").lower(): row
-        for row in metadata_rows
-        if row.get("title")
-    }
+    title_index = {row.get("title", "").lower(): row for row in metadata_rows if row.get("title")}
 
     for paper in papers:
         lookup_id = extract_semantic_scholar_paper_id(paper)
@@ -277,9 +268,7 @@ def enrich_with_semantic_scholar(
         metadata_rows = client.fetch_papers_batch(sorted(set(lookup_ids)))
         paper_lookup = _build_paper_lookup(papers, metadata_rows)
         enriched_papers = [
-            apply_paper_metadata(paper, paper_lookup[paper.id])
-            if paper.id in paper_lookup
-            else paper
+            apply_paper_metadata(paper, paper_lookup[paper.id]) if paper.id in paper_lookup else paper
             for paper in papers
         ]
 
@@ -335,9 +324,7 @@ def summarize_enrichment(
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Enrich local papers JSON with Semantic Scholar metadata."
-    )
+    parser = argparse.ArgumentParser(description="Enrich local papers JSON with Semantic Scholar metadata.")
     parser.add_argument(
         "--input",
         type=Path,

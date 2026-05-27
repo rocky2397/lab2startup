@@ -30,11 +30,7 @@ def compute_prefilter_score(
         applied_topic = max(applied_topic, float(topic_scores.get(topic, 0)))
     score += min(applied_topic, 25.0)
 
-    years = [
-        getattr(papers_by_id[paper_id], "year", 0)
-        for paper_id in researcher.papers
-        if paper_id in papers_by_id
-    ]
+    years = [getattr(papers_by_id[paper_id], "year", 0) for paper_id in researcher.papers if paper_id in papers_by_id]
     if years:
         latest = max(years)
         recency = max(0, 15 - (2026 - latest) * 3)
@@ -107,6 +103,8 @@ def build_investigation_plan(
 
     queue: list[str] = []
     tiers: dict[str, InvestigationTier] = {}
+    unlimited_calls = config.max_agent_calls <= 0
+    queue_limit = len(researchers) if unlimited_calls else config.max_agent_calls + config.queue_reserve
     for rank, researcher_id in enumerate(ranked_ids, start=1):
         researcher = researchers_by_id[researcher_id]
         tier = assign_tier(
@@ -118,10 +116,11 @@ def build_investigation_plan(
             prefilter_min_score=config.prefilter_min_score,
         )
         tiers[researcher_id] = tier
-        if tier != "skip" and len(queue) < config.max_agent_calls + config.queue_reserve:
+        if tier != "skip" and len(queue) < queue_limit:
             queue.append(researcher_id)
 
-    queue = queue[: config.max_agent_calls + config.queue_reserve]
+    if not unlimited_calls:
+        queue = queue[: config.max_agent_calls + config.queue_reserve]
     return scores, queue, tiers
 
 
@@ -131,8 +130,7 @@ def should_early_exit(signals: list, *, enabled: bool) -> bool:
         return False
 
     high_confirmed = any(
-        signal.signal_type == SignalType.CONFIRMED_FOUNDER
-        and signal.evidence_strength == EvidenceStrength.HIGH
+        signal.signal_type == SignalType.CONFIRMED_FOUNDER and signal.evidence_strength == EvidenceStrength.HIGH
         for signal in signals
     )
     if high_confirmed:
@@ -159,7 +157,7 @@ def evaluate_continue(state: AgenticSignalState) -> AgenticSignalState:
     stop_reason: StopReason | None = None
     should_continue = True
 
-    if agent_calls_used >= max_agent_calls:
+    if max_agent_calls > 0 and agent_calls_used >= max_agent_calls:
         should_continue = False
         stop_reason = "budget_exhausted"
     elif not queue:

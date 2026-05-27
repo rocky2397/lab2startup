@@ -8,6 +8,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from app.agents.ingestion_agent import extract_researchers
 from app.integrations.openreview import (
     OpenReviewClient,
     OpenReviewConfig,
@@ -18,7 +19,6 @@ from app.integrations.openreview import (
     venue_id_for_conference,
 )
 from app.models import Paper, PaperAuthor, Researcher
-from app.agents.ingestion_agent import extract_researchers
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 NOTE_FIXTURE = FIXTURES_DIR / "openreview_note_swe_agent.json"

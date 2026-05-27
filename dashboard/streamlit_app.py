@@ -27,13 +27,6 @@ from app.run_store import (
     run_has_results,
 )
 from app.service import clear_cache, get_report_result, set_active_run_id
-from dashboard.filters import (
-    diagnose_filter_miss,
-    filter_cluster_reports,
-    filter_researcher_reports,
-    recommendation_options,
-    researcher_id_from_report_id,
-)
 from dashboard.agent_trace_ui import (
     format_cost_caption,
     render_researcher_trace_expander,
@@ -46,6 +39,14 @@ from dashboard.context_ui import (
     render_researcher_context_card,
     render_run_context_header,
     researcher_paper_context,
+)
+from dashboard.enrichment_audit_ui import render_enrichment_audit_panel
+from dashboard.filters import (
+    diagnose_filter_miss,
+    filter_cluster_reports,
+    filter_researcher_reports,
+    recommendation_options,
+    researcher_id_from_report_id,
 )
 from dashboard.leaderboard_ui import render_top_prospects_board
 from dashboard.researcher_links_ui import render_researcher_profile_links
@@ -88,10 +89,13 @@ def _active_integrations(settings) -> list[str]:
 
 def _run_label(run) -> str:
     created = run.created_at[:10] if run.created_at else "unknown"
+    created_time = ""
+    if run.created_at and len(run.created_at) >= 16:
+        created_time = f" {run.created_at[11:16]} UTC"
     stats = ""
     if run.paper_count is not None:
         stats = f", {run.paper_count} papers"
-    return f"{run.conference} {run.year} — {created} ({run.status.value}{stats})"
+    return f"{run.conference} {run.year} — {created}{created_time} ({run.status.value}{stats})"
 
 
 def _runs_for_selector(
@@ -121,10 +125,7 @@ def _render_empty_dataset_state(
         if active_run.error_message:
             st.error(active_run.error_message)
         elif (active_run.paper_count or 0) == 0:
-            st.info(
-                "This run completed but returned **0 papers** "
-                "(empty fetch, fund filter, or no matching authors)."
-            )
+            st.info("This run completed but returned **0 papers** (empty fetch, fund filter, or no matching authors).")
 
     with_results = filter_runs_with_results(complete_runs)
     if with_results and (active_run is None or not run_has_results(active_run)):
@@ -196,9 +197,7 @@ def main() -> None:
             st.caption(fund.description[:180] + ("…" if len(fund.description) > 180 else ""))
             with st.expander(f"Conferences in scope ({len(fund.conferences)})", expanded=False):
                 st.dataframe(_conference_scope_table(fund), width="stretch", hide_index=True)
-                st.caption(
-                    "OpenReview: NeurIPS, ICML, ICLR · OpenAlex: systems, security, devtools, data infra"
-                )
+                st.caption("OpenReview: NeurIPS, ICML, ICLR · OpenAlex: systems, security, devtools, data infra")
         st.caption("Active sources: " + ", ".join(_active_integrations(settings)))
 
         only_with_results = st.checkbox(
@@ -232,8 +231,7 @@ def main() -> None:
                 st.session_state.pop("dashboard_min_score", None)
         elif settings.is_production:
             st.warning(
-                "No stored runs yet. Start one below or run:\n"
-                "`python run_pipeline.py --conference NeurIPS --year 2024`"
+                "No stored runs yet. Start one below or run:\n`python run_pipeline.py --conference NeurIPS --year 2024`"
             )
         else:
             status = cache_status(
@@ -242,9 +240,7 @@ def main() -> None:
                 ttl_hours=settings.pipeline_cache_ttl_hours,
             )
             if status.get("hit"):
-                st.success(
-                    f"Disk cache available ({status.get('age_hours', '?')}h old)."
-                )
+                st.success(f"Disk cache available ({status.get('age_hours', '?')}h old).")
             elif settings.pipeline_cache_enabled:
                 st.caption(status.get("message", "No cache yet — first load may be slow."))
 
@@ -268,11 +264,7 @@ def main() -> None:
                 ]
             elif run_scope == "All high-priority":
                 run_targets = fund.high_priority_conferences if fund else fund_conferences[:4]
-                st.caption(
-                    "Will run: "
-                    + ", ".join(run_targets[:8])
-                    + ("…" if len(run_targets) > 8 else "")
-                )
+                st.caption("Will run: " + ", ".join(run_targets[:8]) + ("…" if len(run_targets) > 8 else ""))
             else:
                 run_targets = st.multiselect(
                     "Conferences",
@@ -416,14 +408,17 @@ def main() -> None:
     )
 
     if active_run:
+        from app.run_store import load_enrichment_audit
+
+        enrichment_audit = load_enrichment_audit(active_run.id, db_path=settings.db_path)
+        render_enrichment_audit_panel(enrichment_audit)
+
         agentic_run = run_uses_agentic_signals(active_run.config_json)
         if agentic_run:
             from app.agent_trace_store import summarize_run_traces
 
             trace_summary = summarize_run_traces(active_run.id, db_path=settings.db_path)
-            st.caption(
-                f"Signal mode: **Agentic (LangGraph)** · {format_cost_caption(trace_summary)}"
-            )
+            st.caption(f"Signal mode: **Agentic (LangGraph)** · {format_cost_caption(trace_summary)}")
         elif settings.agentic_signal_config.enabled:
             st.caption("Current env enables agentic signals; this stored run used Sonar.")
 
@@ -447,9 +442,7 @@ def main() -> None:
         )
         recommendation = None
         if recommendation_label != "All":
-            recommendation = next(
-                value for label, value in rec_options if label == recommendation_label
-            )
+            recommendation = next(value for label, value in rec_options if label == recommendation_label)
 
         conference = st.selectbox(
             "Conference",
@@ -530,9 +523,7 @@ def main() -> None:
             "or check that Perplexity signals finished for this run."
         )
 
-    researcher_reports = [
-        report for report in result.reports if report.id.startswith("report_researcher_")
-    ]
+    researcher_reports = [report for report in result.reports if report.id.startswith("report_researcher_")]
 
     tab_top, tab_explore = st.tabs(["Top prospects", "Explore & details"])
 
@@ -607,22 +598,17 @@ def _render_explore_tab(
     col3.metric(
         "Avg score",
         round(
-            sum(report.startup_likelihood_score for report in filtered_reports)
-            / len(filtered_reports),
+            sum(report.startup_likelihood_score for report in filtered_reports) / len(filtered_reports),
             1,
         ),
     )
     col4.metric(
         "Take meeting",
-        sum(
-            1
-            for report in filtered_reports
-            if report.recommendation == VCAction.TAKE_MEETING
-        ),
+        sum(1 for report in filtered_reports if report.recommendation == VCAction.TAKE_MEETING),
     )
 
     table_rows = []
-    papers_by_id = {paper.id: paper for paper in papers}
+    papers_by_id = {paper.id: paper for paper in detection.papers}
     researchers_by_id = {researcher.id: researcher for researcher in detection.researchers}
     for report in filtered_reports:
         row = {
@@ -660,15 +646,11 @@ def _render_explore_tab(
         report_ids,
         index=default_index,
         format_func=lambda report_id: next(
-            report.researcher_or_cluster
-            for report in filtered_reports
-            if report.id == report_id
+            report.researcher_or_cluster for report in filtered_reports if report.id == report_id
         ),
     )
     st.session_state.selected_report_id = selected_report_id
-    selected_report = next(
-        report for report in filtered_reports if report.id == selected_report_id
-    )
+    selected_report = next(report for report in filtered_reports if report.id == selected_report_id)
 
     if view_mode == "Researchers":
         researcher_id = researcher_id_from_report_id(selected_report.id)
@@ -678,7 +660,6 @@ def _render_explore_tab(
                 None,
             )
             if researcher:
-                papers_by_id = {paper.id: paper for paper in papers}
                 render_researcher_context_card(
                     researcher=researcher,
                     report=selected_report,
@@ -709,9 +690,7 @@ def _render_explore_tab(
         if view_mode == "Researchers":
             researcher_id = researcher_id_from_report_id(selected_report.id)
             if researcher_id:
-                researcher = next(
-                    r for r in detection.researchers if r.id == researcher_id
-                )
+                researcher = next(r for r in detection.researchers if r.id == researcher_id)
                 st.markdown("**Profile details**")
                 region = infer_region_hint(researcher.affiliation)
                 st.write(f"Affiliation: {researcher.affiliation}")

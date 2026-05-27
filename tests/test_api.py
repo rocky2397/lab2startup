@@ -53,7 +53,9 @@ def test_scores_endpoint() -> None:
     payload = response.json()
     assert len(payload["researchers"]) == 30
     assert len(payload["clusters"]) == 7
-    assert payload["researchers"][0]["startup_likelihood_score"] >= payload["researchers"][-1]["startup_likelihood_score"]
+    top_score = payload["researchers"][0]["startup_likelihood_score"]
+    bottom_score = payload["researchers"][-1]["startup_likelihood_score"]
+    assert top_score >= bottom_score
 
 
 def test_get_researcher_score() -> None:

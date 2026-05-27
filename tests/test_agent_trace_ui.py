@@ -29,19 +29,13 @@ def test_signal_source_label_prefixes() -> None:
 
 
 def test_run_uses_agentic_signals_from_config() -> None:
-    assert run_uses_agentic_signals(
-        {"integrations": {"agentic_signals": {"enabled": True}}}
-    )
-    assert not run_uses_agentic_signals(
-        {"integrations": {"agentic_signals": {"enabled": False}}}
-    )
+    assert run_uses_agentic_signals({"integrations": {"agentic_signals": {"enabled": True}}})
+    assert not run_uses_agentic_signals({"integrations": {"agentic_signals": {"enabled": False}}})
     assert not run_uses_agentic_signals({})
 
 
 def test_parse_trace_timeline_from_fixture() -> None:
-    payload = json.loads(
-        (FIXTURES_DIR / "standard_completed.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads((FIXTURES_DIR / "standard_completed.json").read_text(encoding="utf-8"))
     steps = parse_trace_timeline(payload)
     assert len(steps) >= 2
     assert steps[0]["action"] == "web_search"
@@ -68,9 +62,7 @@ def test_trace_summary_rows_and_lookup(tmp_path: Path) -> None:
             signals_emitted=1,
             summary="Found possible founder evidence.",
             response_json=json.dumps(
-                json.loads(
-                    (FIXTURES_DIR / "standard_completed.json").read_text(encoding="utf-8")
-                )
+                json.loads((FIXTURES_DIR / "standard_completed.json").read_text(encoding="utf-8"))
             ),
         ),
         db_path=db_path,

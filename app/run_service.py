@@ -7,20 +7,16 @@ from dataclasses import asdict, replace
 from pathlib import Path
 
 from app.agents.report_agent import ReportResult, run_reports
-from app.config import AppSettings, get_settings
+from app.config import AgenticSignalConfig, AppSettings, get_settings
 from app.fund_profiles import (
     FundProfile,
     filter_papers_for_fund,
     resolve_paper_source_for_fund,
     validate_conference_for_fund,
 )
-from app.integrations.github import GitHubConfig
 from app.integrations.openalex import OpenAlexFetchConfig
 from app.integrations.openreview import OpenReviewConfig
-from app.config import AgenticSignalConfig
-from app.integrations.perplexity import PerplexityConfig
-from app.integrations.semantic_scholar import SemanticScholarConfig
-from app.models import Paper, PipelineRun, RunStatus
+from app.models import Paper, PipelineRun
 from app.run_store import (
     create_run_record,
     get_run,
@@ -28,6 +24,7 @@ from app.run_store import (
     make_run_id,
     mark_run_failed,
     mark_run_running,
+    save_enrichment_audit,
     save_run_snapshot,
 )
 
@@ -88,9 +85,7 @@ def build_run_configs(
             conference=conference,
             year=year,
             topic_keywords=topic_keywords,
-            max_results=settings.openalex_config.max_results
-            if settings.openalex_config
-            else 50,
+            max_results=settings.openalex_config.max_results if settings.openalex_config else 50,
             mailto=settings.openalex_config.mailto if settings.openalex_config else None,
         )
     elif paper_source == "openreview":
@@ -298,6 +293,27 @@ def execute_pipeline_run(
             include_clusters=include_clusters,
         )
         save_run_snapshot(run_id, result, db_path=db_path)
+        detection = result.scoring.detection
+        if detection.enrichment_audit is not None:
+            save_enrichment_audit(run_id, detection.enrichment_audit, db_path=db_path)
+            from app.enrichment_audit import summarize_enrichment_audit
+
+            audit_summary = summarize_enrichment_audit(detection.enrichment_audit)
+            logger.info("Enrichment audit for %s: %s", run_id, audit_summary)
+            enriched_lines = audit_summary.get("enriched_profile_lines") or []
+            if enriched_lines:
+                logger.info(
+                    "Enriched profiles for %s: %s",
+                    run_id,
+                    "; ".join(enriched_lines),
+                )
+            investigated = audit_summary.get("investigated_profile_names") or []
+            if investigated:
+                logger.info(
+                    "Investigated profiles for %s: %s",
+                    run_id,
+                    ", ".join(investigated),
+                )
         if agentic_config.enabled:
             from app.agent_trace_store import summarize_run_traces
 

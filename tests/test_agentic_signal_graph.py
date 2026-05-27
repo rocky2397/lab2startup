@@ -10,10 +10,10 @@ import httpx
 import pytest
 
 from app.agents.signal_agent import detect_signals
-from app.agents.signal_graph import run_agentic_signal_graph
+from app.agents.signal_graph import _config_from_state, initialize_node, run_agentic_signal_graph
 from app.config import AgenticSignalConfig, clear_settings_cache
 from app.integrations.perplexity_agent import AgentInvestigationResult, PerplexityAgentClient
-from app.models import IdentityConfidence, Paper, Researcher, Signal, SignalType
+from app.models import IdentityConfidence, Researcher, Signal, SignalType
 from app.service import clear_cache
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "agent_responses"
@@ -35,6 +35,45 @@ def mock_agent_client(agent_completed_body: dict) -> PerplexityAgentClient:
     client = PerplexityAgentClient(api_key="test-key", request_delay_seconds=0)
     client._client = http_client
     return client
+
+
+def test_config_from_state_preserves_zero_as_unlimited() -> None:
+    config = _config_from_state({"max_agent_calls": 0, "max_total_steps": 0})
+    assert config.max_agent_calls == 0
+    assert config.max_total_steps == 0
+
+    defaults = _config_from_state({})
+    assert defaults.max_agent_calls == 10
+    assert defaults.max_total_steps == 40
+
+
+def _neurips_like_researchers(count: int = 78) -> list[Researcher]:
+    return [
+        Researcher(
+            id=f"researcher_{index}",
+            name=f"Researcher {index}",
+            affiliation="Stanford",
+            role="PhD Student",
+            papers=[f"paper_{index}_{paper_index}" for paper_index in range(4)],
+            identity_confidence=IdentityConfidence.HIGH,
+        )
+        for index in range(count)
+    ]
+
+
+def test_initialize_node_unlimited_queues_all_non_skip_researchers() -> None:
+    """Regression: LAB2STARTUP_AGENTIC_MAX_CALLS=0 must queue all 78, not 15."""
+    researchers = _neurips_like_researchers()
+    result = initialize_node(
+        {
+            "researchers": researchers,
+            "papers": [],
+            "max_agent_calls": 0,
+            "max_total_steps": 0,
+            "early_exit_enabled": False,
+        }
+    )
+    assert len(result["investigation_queue"]) == 78
 
 
 def test_run_agentic_signal_graph_emits_agent_signals(
@@ -173,64 +212,6 @@ def test_agentic_graph_scoring_unchanged(
     scoring = compute_scores(detection)
     assert scoring.researcher_scores
     assert scoring.detection.signals
-
-
-def test_agentic_graph_early_exit_stops_queue(
-    tmp_path: Path,
-    agent_completed_body: dict,
-) -> None:
-    from app.agents.profile_agent import build_profiles
-    from app.models import EvidenceStrength
-
-    profile = build_profiles()
-    config = AgenticSignalConfig(
-        enabled=True,
-        api_key="test-key",
-        max_agent_calls=5,
-        early_exit=True,
-        db_path=tmp_path / "early_exit.db",
-    )
-
-    high_founder_result = AgentInvestigationResult(
-        payload={},
-        citations=["https://example.com/founder"],
-        signals=[
-            Signal(
-                id="agent_founder_1",
-                signal_type=SignalType.CONFIRMED_FOUNDER,
-                description="Founded Acme AI",
-                source_url="https://example.com/founder",
-                evidence_strength=EvidenceStrength.HIGH,
-                date_found="2025-05-22",
-                researcher_name="Jane Doe",
-            )
-        ],
-        researcher=profile.researchers[0],
-        status="completed",
-        steps_used=3,
-        tool_calls_count=1,
-        input_tokens=10,
-        output_tokens=5,
-        estimated_cost_usd=0.01,
-        summary="High-confidence founder",
-        request_json={},
-        response_json=agent_completed_body,
-    )
-
-    mock_client = MagicMock(spec=PerplexityAgentClient)
-    mock_client.investigate_researcher.return_value = high_founder_result
-
-    _researchers, _signals, traces = run_agentic_signal_graph(
-        run_id="run_early_exit",
-        papers=profile.papers,
-        researchers=profile.researchers[:5],
-        clusters=profile.clusters,
-        config=config,
-        agent_client=mock_client,
-    )
-
-    assert len(traces) == 1
-    mock_client.investigate_researcher.assert_called_once()
 
 
 def test_agentic_graph_early_exit_stops_queue(

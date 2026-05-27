@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from app.agents.signal_coordinator import (
     assign_tier,
     build_investigation_plan,
@@ -49,16 +50,69 @@ def test_compute_prefilter_score_orders_by_papers() -> None:
 
 
 def test_assign_tier_deep_standard_light() -> None:
-    assert assign_tier(1, _researcher(researcher_id="r1", name="A"), deep_slots=3, standard_slots=7, prefilter_score=50, prefilter_min_score=20) == "deep"
-    assert assign_tier(5, _researcher(researcher_id="r5", name="B"), deep_slots=3, standard_slots=7, prefilter_score=50, prefilter_min_score=20) == "standard"
-    assert assign_tier(12, _researcher(researcher_id="r12", name="C", confidence=IdentityConfidence.MEDIUM), deep_slots=3, standard_slots=7, prefilter_score=50, prefilter_min_score=20) == "light"
-    assert assign_tier(1, _researcher(researcher_id="r_skip", name="D"), deep_slots=3, standard_slots=7, prefilter_score=10, prefilter_min_score=20) == "skip"
+    assert (
+        assign_tier(
+            1,
+            _researcher(researcher_id="r1", name="A"),
+            deep_slots=3,
+            standard_slots=7,
+            prefilter_score=50,
+            prefilter_min_score=20,
+        )
+        == "deep"
+    )
+    assert (
+        assign_tier(
+            5,
+            _researcher(researcher_id="r5", name="B"),
+            deep_slots=3,
+            standard_slots=7,
+            prefilter_score=50,
+            prefilter_min_score=20,
+        )
+        == "standard"
+    )
+    assert (
+        assign_tier(
+            12,
+            _researcher(researcher_id="r12", name="C", confidence=IdentityConfidence.MEDIUM),
+            deep_slots=3,
+            standard_slots=7,
+            prefilter_score=50,
+            prefilter_min_score=20,
+        )
+        == "light"
+    )
+    assert (
+        assign_tier(
+            1,
+            _researcher(researcher_id="r_skip", name="D"),
+            deep_slots=3,
+            standard_slots=7,
+            prefilter_score=10,
+            prefilter_min_score=20,
+        )
+        == "skip"
+    )
+
+
+def test_build_investigation_plan_unlimited_queues_all_non_skip() -> None:
+    """max_agent_calls=0 must not cap queue to max_agent_calls + queue_reserve (15)."""
+    researchers = [
+        _researcher(researcher_id=f"r_{index}", name=f"Researcher {index}", paper_count=4)
+        for index in range(78)
+    ]
+    config = AgenticSignalConfig(enabled=True, max_agent_calls=0, queue_reserve=5)
+    _, queue, tiers = build_investigation_plan(researchers, papers_by_id={}, config=config)
+    non_skip = [researcher_id for researcher_id, tier in tiers.items() if tier != "skip"]
+    assert len(non_skip) == 78
+    assert len(queue) == 78
+    assert queue == non_skip
 
 
 def test_build_investigation_plan_respects_max_calls() -> None:
     researchers = [
-        _researcher(researcher_id=f"r_{index}", name=f"Researcher {index}", paper_count=index + 1)
-        for index in range(5)
+        _researcher(researcher_id=f"r_{index}", name=f"Researcher {index}", paper_count=index + 1) for index in range(5)
     ]
     config = AgenticSignalConfig(enabled=True, max_agent_calls=2, queue_reserve=0)
     scores, queue, tiers = build_investigation_plan(researchers, papers_by_id={}, config=config)
@@ -100,7 +154,7 @@ def test_should_early_exit_on_three_strong_signals() -> None:
 
 
 def test_prefilter_score_uses_researcher_history(tmp_path: Path) -> None:
-    from app.agent_trace_store import upsert_researcher_history, ResearcherHistoryRow
+    from app.agent_trace_store import ResearcherHistoryRow, upsert_researcher_history
 
     db_path = tmp_path / "history.db"
     paper = Paper(

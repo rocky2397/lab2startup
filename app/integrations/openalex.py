@@ -100,9 +100,7 @@ def infer_topic(
     topic_keywords: list[str] | None = None,
 ) -> str:
     """Map OpenAlex metadata to Lab2Startup topic labels."""
-    haystack = " ".join(
-        part for part in (title, abstract, primary_topic_name or "") if part
-    ).lower()
+    haystack = " ".join(part for part in (title, abstract, primary_topic_name or "") if part).lower()
 
     if topic_keywords:
         for keyword in topic_keywords:

@@ -21,8 +21,8 @@ from app.agents.signal_coordinator import (
     tier_max_steps,
 )
 from app.agents.signal_graph_state import (
-    AgentTraceRecord,
     AgenticSignalState,
+    AgentTraceRecord,
     InvestigationTier,
 )
 from app.config import AgenticSignalConfig
@@ -30,7 +30,6 @@ from app.integrations.agent_tools import AgentToolHandlers
 from app.integrations.perplexity import apply_perplexity_researcher_updates
 from app.integrations.perplexity_agent import (
     PerplexityAgentClient,
-    merge_agent_signals,
     tier_investigation_config,
 )
 from app.models import Cluster, Paper, Researcher, Signal
@@ -38,6 +37,26 @@ from app.models import Cluster, Paper, Researcher, Signal
 
 def _researchers_by_id(researchers: list[Researcher]) -> dict[str, Researcher]:
     return {researcher.id: researcher for researcher in researchers}
+
+
+def _int_or_default(state: AgenticSignalState, key: str, default: int) -> int:
+    """Read an int from graph state; preserve 0 (e.g. unlimited caps)."""
+    if key not in state:
+        return default
+    value = state[key]
+    if value is None:
+        return default
+    return int(value)
+
+
+def _float_or_default(state: AgenticSignalState, key: str, default: float) -> float:
+    """Read a float from graph state; preserve 0.0."""
+    if key not in state:
+        return default
+    value = state[key]
+    if value is None:
+        return default
+    return float(value)
 
 
 def initialize_node(state: AgenticSignalState) -> dict[str, Any]:
@@ -89,7 +108,7 @@ def pick_next_node(state: AgenticSignalState) -> dict[str, Any]:
     agent_calls_used = int(state.get("agent_calls_used") or 0)
     max_agent_calls = int(state.get("max_agent_calls") or 0)
 
-    if agent_calls_used >= max_agent_calls or not queue:
+    if (max_agent_calls > 0 and agent_calls_used >= max_agent_calls) or not queue:
         return {"current_researcher_id": None}
 
     next_id = queue[0]
@@ -117,9 +136,7 @@ def investigate_researcher_node(
         return {"errors": [f"Unknown researcher id: {researcher_id}"]}
 
     config = agentic_config or _config_from_state(state)
-    tier: InvestigationTier = (state.get("tier_by_researcher") or {}).get(
-        researcher_id, "standard"
-    )
+    tier: InvestigationTier = (state.get("tier_by_researcher") or {}).get(researcher_id, "standard")
     papers_by_id = {paper.id: paper for paper in state.get("papers") or []}
     run_id = state.get("run_id") or "agentic_local"
 
@@ -262,7 +279,9 @@ def finalize_node(state: AgenticSignalState) -> dict[str, Any]:
 
 
 def route_after_pick(state: AgenticSignalState) -> str:
-    if int(state.get("agent_calls_used") or 0) >= int(state.get("max_agent_calls") or 0):
+    max_agent_calls = int(state.get("max_agent_calls") or 0)
+    agent_calls_used = int(state.get("agent_calls_used") or 0)
+    if max_agent_calls > 0 and agent_calls_used >= max_agent_calls:
         return "finalize"
     if not state.get("current_researcher_id"):
         return "finalize"
@@ -279,12 +298,12 @@ def _config_from_state(state: AgenticSignalState) -> AgenticSignalConfig:
     return AgenticSignalConfig(
         enabled=True,
         api_key=state.get("api_key"),  # type: ignore[arg-type]
-        max_agent_calls=int(state.get("max_agent_calls") or 10),
-        max_total_steps=int(state.get("max_total_steps") or 40),
+        max_agent_calls=_int_or_default(state, "max_agent_calls", 10),
+        max_total_steps=_int_or_default(state, "max_total_steps", 40),
         early_exit=bool(state.get("early_exit_enabled", True)),
-        deep_slots=int(state.get("deep_slots") or 3),
-        standard_slots=int(state.get("standard_slots") or 7),
-        prefilter_min_score=float(state.get("prefilter_min_score") or 20),
+        deep_slots=_int_or_default(state, "deep_slots", 3),
+        standard_slots=_int_or_default(state, "standard_slots", 7),
+        prefilter_min_score=_float_or_default(state, "prefilter_min_score", 20.0),
         queue_reserve=5,
         db_path=state.get("db_path"),  # type: ignore[arg-type]
     )
@@ -353,9 +372,7 @@ def run_agentic_signal_graph(
 ) -> tuple[list[Researcher], list[Signal], list[AgentTraceRecord]]:
     """Execute the agentic signal graph end-to-end."""
     if config.enabled and not config.api_key:
-        raise ValueError(
-            "LAB2STARTUP_PERPLEXITY_API_KEY is required when agentic signals are enabled."
-        )
+        raise ValueError("LAB2STARTUP_PERPLEXITY_API_KEY is required when agentic signals are enabled.")
 
     initial: AgenticSignalState = {
         "run_id": run_id,

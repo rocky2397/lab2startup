@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.agents.enrichment_agent import enrich_dataset
-from app.agents.ingestion_agent import IngestionResult, ingest_papers
+from app.agents.ingestion_agent import ingest_papers
 from app.models import Cluster, Paper, Researcher
 
 
@@ -93,13 +93,8 @@ def _make_cluster_name(
     topic: str,
 ) -> str:
     """Build a readable cluster label from topic and key member names."""
-    members = sorted(
-        researchers_by_id[member_id].name for member_id in member_ids
-    )
-    if len(members) <= 2:
-        label = " & ".join(members)
-    else:
-        label = f"{members[0]} & {members[1]} (+{len(members) - 2})"
+    members = sorted(researchers_by_id[member_id].name for member_id in member_ids)
+    label = " & ".join(members) if len(members) <= 2 else f"{members[0]} & {members[1]} (+{len(members) - 2})"
     return f"{topic}: {label}"
 
 

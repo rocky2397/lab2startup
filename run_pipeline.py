@@ -12,8 +12,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
+from bootstrap_venv import reexec_with_project_venv
+
+reexec_with_project_venv(ROOT)
+
 from app.config import clear_settings_cache, get_settings
-from app.fund_profiles import DEFAULT_FUND_ID, list_fund_profiles, load_fund_profile
+from app.fund_profiles import DEFAULT_FUND_ID, load_fund_profile
 from app.run_service import execute_batch_pipeline_runs, execute_pipeline_run
 
 
@@ -24,10 +28,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default_conference = settings.fund_profile.conferences[0].name
 
     parser = argparse.ArgumentParser(
-        description=(
-            "Run the Lab2Startup pipeline for a Backtrace-relevant conference "
-            "and store results in SQLite."
-        ),
+        description=("Run the Lab2Startup pipeline for a Backtrace-relevant conference and store results in SQLite."),
     )
     parser.add_argument(
         "--conferences",

@@ -71,9 +71,7 @@ class AgentToolHandlers:
         if history and history.get("last_run_id"):
             traces = list_traces_for_run(history["last_run_id"], db_path=self.db_path)
             traces = [
-                row
-                for row in traces
-                if row.get("researcher_id") == (researcher_id or history.get("researcher_id"))
+                row for row in traces if row.get("researcher_id") == (researcher_id or history.get("researcher_id"))
             ][:3]
 
         latest_trace = None

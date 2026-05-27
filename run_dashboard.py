@@ -7,6 +7,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from bootstrap_venv import reexec_with_project_venv
+
+reexec_with_project_venv(ROOT)
 
 
 def _python_executable() -> str:

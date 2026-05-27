@@ -49,11 +49,7 @@ class FundProfile:
 
     def conferences_with_priority(self, priority: str) -> tuple[FundConference, ...]:
         normalized = priority.strip().lower()
-        return tuple(
-            conference
-            for conference in self.conferences
-            if conference.priority.lower() == normalized
-        )
+        return tuple(conference for conference in self.conferences if conference.priority.lower() == normalized)
 
     @property
     def high_priority_conferences(self) -> list[str]:
@@ -119,9 +115,7 @@ def load_fund_profile(fund_id: str, *, funds_dir: Path | None = None) -> FundPro
         description=str(data.get("description", "")).strip(),
         conferences=_parse_conferences(data.get("conferences")),
         topic_keywords=tuple(str(item) for item in data.get("topic_keywords") or []),
-        exclude_topic_keywords=tuple(
-            str(item) for item in data.get("exclude_topic_keywords") or []
-        ),
+        exclude_topic_keywords=tuple(str(item) for item in data.get("exclude_topic_keywords") or []),
         topic_scores={str(key): int(value) for key, value in topic_scores.items()},
         perplexity_context=str(data.get("perplexity_context", "")).strip(),
         default_paper_source=str(data.get("default_paper_source", "openreview")),
@@ -146,10 +140,7 @@ def validate_conference_for_fund(conference: str, fund: FundProfile) -> FundConf
     entry = fund.conference(conference)
     if entry is None:
         allowed = ", ".join(fund.conference_names)
-        raise ValueError(
-            f"Conference '{conference}' is not in scope for {fund.name}. "
-            f"Allowed conferences: {allowed}"
-        )
+        raise ValueError(f"Conference '{conference}' is not in scope for {fund.name}. Allowed conferences: {allowed}")
     return entry
 
 
@@ -173,19 +164,13 @@ def resolve_paper_source_for_fund(
 
 
 def _paper_text(paper: Paper) -> str:
-    return " ".join(
-        part
-        for part in (paper.title, paper.abstract, paper.topic)
-        if part
-    ).lower()
+    return " ".join(part for part in (paper.title, paper.abstract, paper.topic) if part).lower()
 
 
 def paper_matches_fund(paper: Paper, fund: FundProfile) -> bool:
     """Return True when a paper fits the fund's topic scope."""
     text = _paper_text(paper)
-    if fund.exclude_topic_keywords and any(
-        keyword.lower() in text for keyword in fund.exclude_topic_keywords
-    ):
+    if fund.exclude_topic_keywords and any(keyword.lower() in text for keyword in fund.exclude_topic_keywords):
         return False
     if not fund.topic_keywords:
         return True

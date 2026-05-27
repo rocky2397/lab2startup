@@ -29,9 +29,7 @@ def test_signal_gets_researcher_and_cluster_ids() -> None:
     assert john_signal.cluster_id is not None
     assert john_signal.signal_type == SignalType.COMMERCIALIZATION
 
-    carlos_signal = next(
-        signal for signal in result.signals if signal.researcher_name == "Carlos E. Jimenez"
-    )
+    carlos_signal = next(signal for signal in result.signals if signal.researcher_name == "Carlos E. Jimenez")
     assert carlos_signal.researcher_id == "researcher_carlos_e_jimenez"
     assert john_signal.cluster_id == carlos_signal.cluster_id
 

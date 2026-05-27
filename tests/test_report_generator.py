@@ -10,9 +10,7 @@ from app.report_generator import build_researcher_report, render_report_markdown
 
 def test_render_report_markdown_includes_core_sections() -> None:
     result = run_reports(include_clusters=False)
-    marinka_report = next(
-        report for report in result.reports if report.researcher_or_cluster == "Marinka Zitnik"
-    )
+    marinka_report = next(report for report in result.reports if report.researcher_or_cluster == "Marinka Zitnik")
     markdown = render_report_markdown(marinka_report)
 
     assert "# Founder Monitoring Report: Marinka Zitnik" in markdown

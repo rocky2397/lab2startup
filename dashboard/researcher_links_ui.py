@@ -16,12 +16,16 @@ def render_researcher_profile_links(
 ) -> ResearcherLinks:
     """Show clickable GitHub / LinkedIn / OpenReview links when available."""
     links = resolve_researcher_links(researcher, signals)
-    visible = [name for name, url in (
-        ("GitHub", links.github),
-        ("LinkedIn", links.linkedin),
-        ("OpenReview", links.openreview),
-        ("Website", links.website),
-    ) if url]
+    visible = [
+        name
+        for name, url in (
+            ("GitHub", links.github),
+            ("LinkedIn", links.linkedin),
+            ("OpenReview", links.openreview),
+            ("Website", links.website),
+        )
+        if url
+    ]
 
     if not visible:
         st.caption("No GitHub or LinkedIn profile found yet — rerun with Perplexity enrichment.")
@@ -29,12 +33,16 @@ def render_researcher_profile_links(
 
     st.markdown(f"**{label}**")
     columns = st.columns(min(len(visible), 4))
-    for column, (name, url) in zip(columns, (
-        ("GitHub", links.github),
-        ("LinkedIn", links.linkedin),
-        ("OpenReview", links.openreview),
-        ("Website", links.website),
-    )):
+    for column, (name, url) in zip(
+        columns,
+        (
+            ("GitHub", links.github),
+            ("LinkedIn", links.linkedin),
+            ("OpenReview", links.openreview),
+            ("Website", links.website),
+        ),
+        strict=False,
+    ):
         if not url:
             continue
         column.link_button(name, url, use_container_width=True)

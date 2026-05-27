@@ -321,12 +321,9 @@ class PerplexityAgentClient:
         *,
         base_body: dict[str, Any],
     ) -> dict[str, Any]:
-        """Handle requires_action custom function calls (max 3 round-trips)."""
+        """Execute pending custom function calls and continue the agent (max 3 round-trips)."""
         current = response
         for _ in range(MAX_CUSTOM_TOOL_ROUNDS):
-            if current.get("status") != "requires_action":
-                return current
-
             function_calls = _extract_function_calls(current)
             if not function_calls:
                 return current
@@ -421,8 +418,48 @@ class PerplexityAgentClient:
         tool_calls_count = _count_tool_calls(response)
         steps_used = int(response.get("max_steps") or config.max_steps)
 
+        pending_calls = _extract_function_calls(response)
+        if pending_calls:
+            return AgentInvestigationResult(
+                payload=None,
+                citations=citations,
+                signals=[],
+                researcher=researcher,
+                status="failed",
+                steps_used=steps_used,
+                tool_calls_count=tool_calls_count,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                estimated_cost_usd=estimated_cost,
+                summary="Agent investigation ended with unresolved custom tool calls.",
+                request_json=_redact_request(request_body),
+                response_json=response,
+                error_message=(
+                    f"Unresolved custom tool calls after {MAX_CUSTOM_TOOL_ROUNDS} round-trips: "
+                    f"{', '.join(str(call.get('name') or 'unknown') for call in pending_calls)}"
+                ),
+            )
+
+        if not text:
+            return AgentInvestigationResult(
+                payload=None,
+                citations=citations,
+                signals=[],
+                researcher=researcher,
+                status="failed",
+                steps_used=steps_used,
+                tool_calls_count=tool_calls_count,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                estimated_cost_usd=estimated_cost,
+                summary="Agent response did not contain output text.",
+                request_json=_redact_request(request_body),
+                response_json=response,
+                error_message="Agent response did not contain output text.",
+            )
+
         try:
-            payload = _extract_json_object(text) if text else {}
+            payload = _extract_json_object(text)
         except (ValueError, json.JSONDecodeError) as exc:
             return AgentInvestigationResult(
                 payload=None,
@@ -492,9 +529,7 @@ def merge_agent_signals(
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Probe Perplexity Agent API for a single researcher investigation."
-    )
+    parser = argparse.ArgumentParser(description="Probe Perplexity Agent API for a single researcher investigation.")
     parser.add_argument("--name", required=True, help="Researcher full name")
     parser.add_argument("--affiliation", default="Unknown")
     parser.add_argument("--role", default="Researcher")

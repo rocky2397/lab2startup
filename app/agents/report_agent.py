@@ -69,9 +69,7 @@ def generate_reports(
             if entity_score.startup_likelihood_score < min_score:
                 continue
             cluster = clusters_by_id[entity_score.entity_id]
-            member_names = [
-                researchers_by_id[member_id].name for member_id in cluster.researchers
-            ]
+            member_names = [researchers_by_id[member_id].name for member_id in cluster.researchers]
             cluster_signals: list = []
             seen_signal_ids: set[str] = set()
             for member_id in cluster.researchers:

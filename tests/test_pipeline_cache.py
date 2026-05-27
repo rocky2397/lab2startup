@@ -7,7 +7,6 @@ from pathlib import Path
 from app.agents.report_agent import run_reports
 from app.config import get_settings
 from app.pipeline_cache import (
-    build_pipeline_fingerprint,
     clear_pipeline_disk_cache,
     load_cached_report_result,
     save_cached_report_result,

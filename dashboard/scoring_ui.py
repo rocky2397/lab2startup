@@ -87,9 +87,7 @@ def score_breakdown_dataframe(report) -> pd.DataFrame:
 
 
 def _format_signal_points(signal: Signal) -> str:
-    points = SIGNAL_TYPE_POINTS.get(signal.signal_type.value, {}).get(
-        signal.evidence_strength.value, 0
-    )
+    points = SIGNAL_TYPE_POINTS.get(signal.signal_type.value, {}).get(signal.evidence_strength.value, 0)
     return f"{points} pts ({signal.signal_type.value}, {signal.evidence_strength.value})"
 
 
@@ -146,9 +144,7 @@ def render_scoring_methodology_expander(
             if scores:
                 st.markdown("**Topic scores** used for applied relevance:")
                 st.dataframe(
-                    pd.DataFrame(
-                        [{"Topic": topic, "Score": score} for topic, score in sorted(scores.items())]
-                    ),
+                    pd.DataFrame([{"Topic": topic, "Score": score} for topic, score in sorted(scores.items())]),
                     width="stretch",
                     hide_index=True,
                 )
@@ -175,9 +171,7 @@ def render_candidate_score_breakdown_expander(report) -> None:
         st.dataframe(breakdown_df, width="stretch", hide_index=True)
 
         if penalty > 0:
-            st.caption(
-                f"Component sum: **{raw_total}**. Final score after identity penalty: **{total}**."
-            )
+            st.caption(f"Component sum: **{raw_total}**. Final score after identity penalty: **{total}**.")
 
         st.markdown("#### Component detail")
         breakdown = report.score_breakdown

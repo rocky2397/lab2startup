@@ -21,6 +21,11 @@ dependencies = [
   "langchain-core>=0.3.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.8.0",
+]
+
 [project.scripts]
 lab2startup-run = "run_pipeline:main"
 
@@ -33,3 +38,27 @@ py-modules = ["run_pipeline"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = [".venv", ".cache", "__pycache__", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"run_pipeline.py" = ["E402"]
+"run_dashboard.py" = ["E402"]
+"run_enrichment_check.py" = ["E402"]
+"dashboard/streamlit_app.py" = ["E402"]
+"tests/conftest.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "dashboard"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

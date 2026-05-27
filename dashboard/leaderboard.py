@@ -8,12 +8,12 @@ import pandas as pd
 
 from app.models import Paper, Report, Researcher, SignalType, VCAction
 from app.report_generator import RECOMMENDATION_LABELS
-from dashboard.filters import filter_researcher_reports, researcher_id_from_report_id
 from dashboard.context_ui import (
     format_conference_year_label,
     infer_region_hint,
     researcher_paper_context,
 )
+from dashboard.filters import filter_researcher_reports, researcher_id_from_report_id
 
 
 @dataclass(frozen=True)

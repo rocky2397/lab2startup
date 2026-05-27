@@ -68,11 +68,7 @@ def parse_trace_timeline(response_json: str | dict[str, Any] | None) -> list[dic
                 }
             )
         elif item_type == "fetch_url_results":
-            urls = [
-                str(result.get("url") or "")
-                for result in (item.get("contents") or [])
-                if result.get("url")
-            ]
+            urls = [str(result.get("url") or "") for result in (item.get("contents") or []) if result.get("url")]
             steps.append(
                 {
                     "step": str(len(steps) + 1),
@@ -137,15 +133,10 @@ def find_trace_for_researcher(
 
 def format_cost_caption(summary: dict[str, Any]) -> str:
     """One-line cost/token summary for sidebar metrics."""
-    tokens = int(summary.get("total_input_tokens") or 0) + int(
-        summary.get("total_output_tokens") or 0
-    )
+    tokens = int(summary.get("total_input_tokens") or 0) + int(summary.get("total_output_tokens") or 0)
     cost = summary.get("estimated_cost_usd")
     cost_text = f"~${cost:.2f}" if cost is not None else "—"
-    return (
-        f"{summary.get('trace_count', 0)} investigations · "
-        f"{tokens:,} tokens · {cost_text} est."
-    )
+    return f"{summary.get('trace_count', 0)} investigations · {tokens:,} tokens · {cost_text} est."
 
 
 def render_run_trace_summary(
@@ -198,8 +189,7 @@ def render_researcher_trace_expander(
     max_steps = trace_row.get("max_steps")
     status = trace_row.get("status") or "unknown"
     title = (
-        f"Investigation trace — {trace_row.get('researcher_name')} "
-        f"({tier}, {steps_used}/{max_steps} steps, {status})"
+        f"Investigation trace — {trace_row.get('researcher_name')} ({tier}, {steps_used}/{max_steps} steps, {status})"
     )
 
     with st.expander(title, expanded=False):
@@ -208,15 +198,11 @@ def render_researcher_trace_expander(
         if trace_row.get("error_message"):
             st.error(trace_row["error_message"])
 
-        timeline = parse_trace_timeline(
-            full_trace.get("response_json") if full_trace else None
-        )
+        timeline = parse_trace_timeline(full_trace.get("response_json") if full_trace else None)
         if timeline:
             st.markdown("#### Step timeline")
             for step in timeline:
-                st.markdown(
-                    f"- **Step {step['step']}:** `{step['action']}` — {step['detail']}"
-                )
+                st.markdown(f"- **Step {step['step']}:** `{step['action']}` — {step['detail']}")
         elif status == "failed":
             st.caption("No step timeline available (investigation failed before output).")
         else:
@@ -230,9 +216,7 @@ def render_researcher_trace_expander(
         )
         metrics_col3.metric(
             "Est. cost",
-            f"${trace_row['estimated_cost_usd']:.3f}"
-            if trace_row.get("estimated_cost_usd") is not None
-            else "—",
+            f"${trace_row['estimated_cost_usd']:.3f}" if trace_row.get("estimated_cost_usd") is not None else "—",
         )
 
         if full_trace and full_trace.get("response_json"):

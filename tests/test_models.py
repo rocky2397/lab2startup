@@ -1,7 +1,5 @@
 """Tests for Pydantic models and JSON loading."""
 
-from pathlib import Path
-
 import pytest
 from pydantic import ValidationError
 
