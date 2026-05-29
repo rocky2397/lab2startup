@@ -119,14 +119,19 @@ def _record_status(
     *,
     targeted: bool,
     investigated: bool,
+    investigation_failed: bool,
     affiliation_resolved: bool,
     signal_count: int,
     post: Researcher,
 ) -> str:
-    if signal_count > 0 or affiliation_resolved:
+    if investigation_failed:
+        return "investigation_failed"
+    if signal_count > 0:
+        return "investigated_with_signals"
+    if affiliation_resolved:
         return "enriched"
     if investigated:
-        return "investigated_no_change"
+        return "investigated_no_signal"
     if targeted:
         return "targeted_not_reached"
     if _is_unknown(post.affiliation):
@@ -158,6 +163,7 @@ def build_enrichment_audit(
     signals: list[Signal],
     targeted_ids: set[str] | None = None,
     investigated_ids: set[str] | None = None,
+    investigation_failed_ids: set[str] | None = None,
     tier_by_id: dict[str, str] | None = None,
     skip_reason_by_id: dict[str, str] | None = None,
     config_summary: dict[str, Any] | None = None,
@@ -165,6 +171,7 @@ def build_enrichment_audit(
     """Compare pre/post researcher state and build a verification audit."""
     targeted_ids = targeted_ids or set()
     investigated_ids = investigated_ids or set()
+    investigation_failed_ids = investigation_failed_ids or set()
     tier_by_id = tier_by_id or {}
     skip_reason_by_id = skip_reason_by_id or {}
 
@@ -207,6 +214,7 @@ def build_enrichment_audit(
                 status=_record_status(
                     targeted=targeted,
                     investigated=investigated,
+                    investigation_failed=researcher_id in investigation_failed_ids,
                     affiliation_resolved=affiliation_resolved,
                     signal_count=signal_count,
                     post=post,
@@ -332,17 +340,26 @@ def enrichment_profile_lists(audit: EnrichmentAudit) -> dict[str, list[dict[str,
     enriched_profiles: list[dict[str, Any]] = []
     investigated_profiles: list[dict[str, Any]] = []
     with_signals_profiles: list[dict[str, Any]] = []
-    investigated_no_change_profiles: list[dict[str, Any]] = []
+    investigated_no_signal_profiles: list[dict[str, Any]] = []
+    investigation_failed_profiles: list[dict[str, Any]] = []
     skipped_profiles: list[dict[str, Any]] = []
 
     for record in audit.records:
         profile = _profile_summary(record)
         if record.skip_reason:
             skipped_profiles.append(profile)
-        if record.status in {"enriched", "investigated_no_change", "targeted_not_reached"}:
+        if record.status in {
+            "enriched",
+            "investigated_no_signal",
+            "investigated_with_signals",
+            "investigation_failed",
+            "targeted_not_reached",
+        }:
             investigated_profiles.append(profile)
-        if record.status == "investigated_no_change":
-            investigated_no_change_profiles.append(profile)
+        if record.status == "investigated_no_signal":
+            investigated_no_signal_profiles.append(profile)
+        if record.status == "investigation_failed":
+            investigation_failed_profiles.append(profile)
         if (
             record.affiliation_resolved
             or record.signal_count > 0
@@ -357,7 +374,9 @@ def enrichment_profile_lists(audit: EnrichmentAudit) -> dict[str, list[dict[str,
         "enriched_profiles": enriched_profiles,
         "investigated_profiles": investigated_profiles,
         "with_signals_profiles": with_signals_profiles,
-        "investigated_no_change_profiles": investigated_no_change_profiles,
+        "investigated_no_signal_profiles": investigated_no_signal_profiles,
+        "investigated_no_change_profiles": investigated_no_signal_profiles,
+        "investigation_failed_profiles": investigation_failed_profiles,
         "skipped_profiles": skipped_profiles,
     }
 

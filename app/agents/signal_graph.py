@@ -29,7 +29,10 @@ from app.config import AgenticSignalConfig
 from app.integrations.agent_tools import AgentToolHandlers
 from app.integrations.perplexity import apply_perplexity_researcher_updates
 from app.integrations.perplexity_agent import (
+    AgentInvestigationConfig,
+    AgentInvestigationResult,
     PerplexityAgentClient,
+    should_fallback_to_light,
     tier_investigation_config,
 )
 from app.models import Cluster, Paper, Researcher, Signal
@@ -118,6 +121,70 @@ def pick_next_node(state: AgenticSignalState) -> dict[str, Any]:
     }
 
 
+def _tier_investigation_config_from_agentic(
+    tier: InvestigationTier,
+    config: AgenticSignalConfig,
+) -> AgentInvestigationConfig:
+    return tier_investigation_config(
+        tier,
+        preset_standard=config.preset_standard,
+        preset_deep=config.preset_deep,
+        model=config.model,
+        max_signals_per_researcher=config.max_signals_per_researcher,
+        enrich_profiles=config.enrich_profiles,
+        fund_context=config.fund_context,
+    )
+
+
+def _save_investigation_trace(
+    *,
+    result: AgentInvestigationResult,
+    tier: InvestigationTier,
+    investigation_config: AgentInvestigationConfig,
+    researcher: Researcher,
+    run_id: str,
+    db_path: object,
+) -> tuple[str, AgentTraceRecord]:
+    trace_id = make_trace_id()
+    save_agent_trace(
+        AgentTraceRow(
+            id=trace_id,
+            run_id=run_id,
+            researcher_id=researcher.id,
+            researcher_name=researcher.name,
+            tier=tier,
+            max_steps=tier_max_steps(tier),
+            steps_used=result.steps_used,
+            preset=investigation_config.preset,
+            model=investigation_config.model,
+            status=result.status,
+            tool_calls_count=result.tool_calls_count,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            estimated_cost_usd=result.estimated_cost_usd,
+            summary=result.summary,
+            request_json=json.dumps(result.request_json),
+            response_json=json.dumps(result.response_json) if result.response_json else None,
+            signals_emitted=len(result.signals),
+            error_message=result.error_message,
+        ),
+        db_path=db_path,
+    )
+    trace_record: AgentTraceRecord = {
+        "trace_id": trace_id,
+        "researcher_id": researcher.id,
+        "tier": tier,
+        "max_steps": tier_max_steps(tier),
+        "status": result.status,
+        "tool_calls_count": result.tool_calls_count,
+        "steps_used": result.steps_used,
+        "input_tokens": result.input_tokens,
+        "output_tokens": result.output_tokens,
+        "summary": result.summary,
+    }
+    return trace_id, trace_record
+
+
 def investigate_researcher_node(
     state: AgenticSignalState,
     *,
@@ -145,15 +212,7 @@ def investigate_researcher_node(
         github_config=config.github_config,
         run_id=run_id,
     )
-    investigation_config = tier_investigation_config(
-        tier,
-        preset_standard=config.preset_standard,
-        preset_deep=config.preset_deep,
-        model=config.model,
-        max_signals_per_researcher=config.max_signals_per_researcher,
-        enrich_profiles=config.enrich_profiles,
-        fund_context=config.fund_context,
-    )
+    investigation_config = _tier_investigation_config_from_agentic(tier, config)
 
     client = agent_client
     owns_client = False
@@ -177,36 +236,61 @@ def investigate_researcher_node(
             tier=tier,
             config=investigation_config,
             tool_handlers=handlers,
+            researchers_by_id=researchers,
         )
+        attempts: list[tuple[InvestigationTier, AgentInvestigationConfig, AgentInvestigationResult]] = [
+            (tier, investigation_config, result)
+        ]
+
+        if should_fallback_to_light(tier, result.error_message):
+            fallback_config = _tier_investigation_config_from_agentic("light", config)
+            fallback_result = client.investigate_researcher(
+                researcher,
+                papers_by_id,
+                tier="light",
+                config=fallback_config,
+                tool_handlers=handlers,
+                researchers_by_id=researchers,
+            )
+            fallback_result = AgentInvestigationResult(
+                payload=fallback_result.payload,
+                citations=fallback_result.citations,
+                signals=fallback_result.signals,
+                researcher=fallback_result.researcher,
+                status=fallback_result.status,
+                steps_used=fallback_result.steps_used,
+                tool_calls_count=fallback_result.tool_calls_count,
+                input_tokens=fallback_result.input_tokens,
+                output_tokens=fallback_result.output_tokens,
+                estimated_cost_usd=fallback_result.estimated_cost_usd,
+                summary=(
+                    f"Light fallback after {tier} failed ({result.error_message}): "
+                    f"{fallback_result.summary}"
+                ),
+                request_json=fallback_result.request_json,
+                response_json=fallback_result.response_json,
+                error_message=fallback_result.error_message,
+            )
+            attempts.append(("light", fallback_config, fallback_result))
+            if fallback_result.status == "completed":
+                result = fallback_result
     finally:
         if owns_client and client is not None:
             client.close()
 
-    trace_id = make_trace_id()
-    save_agent_trace(
-        AgentTraceRow(
-            id=trace_id,
+    trace_records: list[AgentTraceRecord] = []
+    trace_ids: list[str] = []
+    for attempt_tier, attempt_config, attempt_result in attempts:
+        trace_id, trace_record = _save_investigation_trace(
+            result=attempt_result,
+            tier=attempt_tier,
+            investigation_config=attempt_config,
+            researcher=researcher,
             run_id=run_id,
-            researcher_id=researcher.id,
-            researcher_name=researcher.name,
-            tier=tier,
-            max_steps=tier_max_steps(tier),
-            steps_used=result.steps_used,
-            preset=investigation_config.preset,
-            model=investigation_config.model,
-            status=result.status,
-            tool_calls_count=result.tool_calls_count,
-            input_tokens=result.input_tokens,
-            output_tokens=result.output_tokens,
-            estimated_cost_usd=result.estimated_cost_usd,
-            summary=result.summary,
-            request_json=json.dumps(result.request_json),
-            response_json=json.dumps(result.response_json) if result.response_json else None,
-            signals_emitted=len(result.signals),
-            error_message=result.error_message,
-        ),
-        db_path=config.db_path,
-    )
+            db_path=config.db_path,
+        )
+        trace_ids.append(trace_id)
+        trace_records.append(trace_record)
 
     if result.status == "completed":
         best_signal = None
@@ -223,13 +307,13 @@ def investigate_researcher_node(
                 last_investigated_at=None,
                 last_conference=state.get("conference"),
                 last_year=state.get("year"),
-                last_tier=tier,
+                last_tier=attempts[-1][0],
                 last_signal_count=len(result.signals),
                 last_best_signal_type=best_signal.signal_type.value if best_signal else None,
                 last_identity_confidence=result.researcher.identity_confidence.value,
                 affiliation=result.researcher.affiliation,
                 profile_url=result.researcher.openreview_url,
-                notes_json=json.dumps({"last_trace_id": trace_id}),
+                notes_json=json.dumps({"last_trace_id": trace_ids[-1], "trace_ids": trace_ids}),
             ),
             db_path=config.db_path,
         )
@@ -241,27 +325,17 @@ def investigate_researcher_node(
     investigated = list(state.get("investigated_ids") or [])
     investigated.append(researcher_id)
 
-    trace_record: AgentTraceRecord = {
-        "trace_id": trace_id,
-        "researcher_id": researcher.id,
-        "tier": tier,
-        "max_steps": tier_max_steps(tier),
-        "status": result.status,
-        "tool_calls_count": result.tool_calls_count,
-        "steps_used": result.steps_used,
-        "input_tokens": result.input_tokens,
-        "output_tokens": result.output_tokens,
-        "summary": result.summary,
-    }
+    steps_used_delta = sum(attempt_result.steps_used for _, _, attempt_result in attempts)
+    error_messages = [attempt_result.error_message for _, _, attempt_result in attempts if attempt_result.error_message]
 
     return {
         "signals": result.signals,
         "researcher_updates": updates,
-        "traces": [trace_record],
+        "traces": trace_records,
         "agent_calls_used": int(state.get("agent_calls_used") or 0) + 1,
-        "steps_used_total": int(state.get("steps_used_total") or 0) + result.steps_used,
+        "steps_used_total": int(state.get("steps_used_total") or 0) + steps_used_delta,
         "investigated_ids": investigated,
-        "errors": [result.error_message] if result.error_message else [],
+        "errors": error_messages if result.status == "failed" else [],
     }
 
 

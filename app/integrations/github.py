@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from app.models import EvidenceStrength, Paper, Researcher, Signal, SignalType
+from app.researcher_links import github_login_matches_researcher
 
 GITHUB_API_BASE = "https://api.github.com"
 DEFAULT_USER_AGENT = "Lab2Startup/0.1"
@@ -71,26 +72,7 @@ def extract_search_terms(paper: Paper) -> list[str]:
 
 
 def _author_matches_login(author_name: str, login: str) -> bool:
-    login_norm = _normalize_login(login)
-    if not login_norm:
-        return False
-
-    parts = [part for part in _normalize_person_name(author_name).split() if part]
-    if not parts:
-        return False
-
-    if len(parts) >= 2:
-        first, last = parts[0], parts[-1]
-        compact = first + last
-        reversed_compact = last + first
-        if compact in login_norm or reversed_compact in login_norm:
-            return True
-        if login_norm.startswith(last) and first[0] in login_norm:
-            return True
-        if login_norm.startswith(first) and last[0] in login_norm:
-            return True
-
-    return any(part in login_norm for part in parts if len(part) >= 3)
+    return github_login_matches_researcher(author_name, login)
 
 
 def _is_recent(pushed_at: str | None) -> bool:
@@ -122,7 +104,7 @@ def pick_researcher_for_repo(
     login = owner.get("login") or ""
 
     for author in paper.authors:
-        if _author_matches_login(author.name, login):
+        if github_login_matches_researcher(author.name, login):
             return researchers_by_name.get(author.name)
 
     if owner.get("type") == "Organization":
@@ -328,7 +310,11 @@ def apply_github_usernames(
     updated: list[Researcher] = []
     for researcher in researchers:
         login = login_by_researcher.get(researcher.name)
-        if login and researcher.github_username is None:
+        if (
+            login
+            and researcher.github_username is None
+            and github_login_matches_researcher(researcher.name, login)
+        ):
             updated.append(researcher.model_copy(update={"github_username": login}))
         else:
             updated.append(researcher)

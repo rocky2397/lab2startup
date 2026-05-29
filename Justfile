@@ -40,3 +40,7 @@ agentic-smoke limit="5":
 # Show which researchers a smoke test would probe (no API calls)
 agentic-smoke-dry limit="5":
     {{python}} run_agentic_smoke.py --limit {{limit}} --dry-run
+
+# Export latest complete run per conference for a batch date stamp (YYYYMMDD)
+export-batch batch_date label="saved_batch":
+    {{python}} run_export.py --batch-date {{batch_date}} --latest-per-conference --label {{label}}

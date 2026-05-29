@@ -23,7 +23,16 @@ from app.models import (
     Signal,
     SignalType,
 )
-from app.researcher_links import normalize_github_profile_url, normalize_linkedin_profile_url
+from app.identity_validation import (
+    profile_identity_matches_researcher,
+    signal_description_matches_researcher,
+)
+from app.researcher_links import (
+    accept_github_profile_for_researcher,
+    accept_linkedin_profile_for_researcher,
+    github_username_from_url,
+    normalize_linkedin_profile_url,
+)
 
 PERPLEXITY_API_BASE = "https://api.perplexity.ai"
 DEFAULT_MODEL = "sonar-pro"
@@ -90,6 +99,17 @@ SIGNAL_RESPONSE_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+PROFILE_LINK_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "linkedin_url": {"type": "string"},
+        "github_url": {"type": "string"},
+        "identity_explanation": {"type": "string"},
+    },
+    "required": ["linkedin_url", "github_url", "identity_explanation"],
+    "additionalProperties": False,
+}
+
 
 @dataclass
 class PerplexityConfig:
@@ -114,6 +134,60 @@ def _is_valid_http_url(value: str) -> bool:
     except ValueError:
         return False
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _url_in_citations(url: str | None, citations: list[str]) -> bool:
+    """Return True when a URL exactly matches a Perplexity citation."""
+    if not url or not citations:
+        return False
+    normalized = url.rstrip("/").lower()
+    return any(
+        _is_valid_http_url(citation) and citation.rstrip("/").lower() == normalized for citation in citations
+    )
+
+
+def _social_url_supported_by_citations(url: str | None, citations: list[str]) -> bool:
+    """Accept social URLs that exactly match or appear inside a citation URL."""
+    if not url or not citations:
+        return False
+    if _url_in_citations(url, citations):
+        return True
+
+    normalized = url.rstrip("/").lower()
+    for citation in citations:
+        if not _is_valid_http_url(citation):
+            continue
+        citation_norm = citation.rstrip("/").lower()
+        if normalized in citation_norm or citation_norm in normalized:
+            return True
+    return False
+
+
+def _accept_linkedin_from_search(
+    researcher_name: str,
+    raw: str,
+    citations: list[str],
+) -> str | None:
+    url = normalize_linkedin_profile_url(raw)
+    if not url or not _social_url_supported_by_citations(url, citations):
+        return None
+    return accept_linkedin_profile_for_researcher(researcher_name, url, require_name_match=True)
+
+
+def _accept_github_from_search(
+    researcher_name: str,
+    raw: str,
+    citations: list[str],
+) -> str | None:
+    url = accept_github_profile_for_researcher(
+        researcher_name,
+        raw,
+        verify_exists=True,
+        require_name_match=True,
+    )
+    if not url or not _social_url_supported_by_citations(url, citations):
+        return None
+    return url
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -144,6 +218,7 @@ def build_researcher_context(
     papers_by_id: dict[str, Paper],
     *,
     fund_context: str | None = None,
+    researchers_by_id: dict[str, Researcher] | None = None,
 ) -> dict[str, Any]:
     """Build a compact context bundle for a Perplexity query."""
     paper_records = []
@@ -159,12 +234,20 @@ def build_researcher_context(
             }
         )
 
+    coauthor_names: list[str] = []
+    if researchers_by_id:
+        for coauthor_id in researcher.coauthors:
+            coauthor = researchers_by_id.get(coauthor_id)
+            if coauthor is not None:
+                coauthor_names.append(coauthor.name)
+
     return {
         "name": researcher.name,
         "affiliation": researcher.affiliation,
         "role": researcher.role,
         "identity_confidence": researcher.identity_confidence.value,
         "papers": paper_records,
+        "coauthor_names": coauthor_names,
         "openreview_url": researcher.openreview_url,
         "github_username": researcher.github_username,
         "fund_context": fund_context,
@@ -189,20 +272,36 @@ def build_founder_search_prompt(context: dict[str, Any]) -> str:
     if context.get("fund_context"):
         fund_block = f"Fund investment focus:\n{context['fund_context']}\n\n"
 
+    coauthor_block = ""
+    coauthor_names = context.get("coauthor_names") or []
+    if coauthor_names:
+        coauthor_block = f"Paper coauthors (for disambiguation): {', '.join(coauthor_names)}\n\n"
+
+    researcher_name = context["name"]
+    critical_rule = (
+        f"CRITICAL: Investigate ONLY {researcher_name}. "
+        "If search results refer to a different person, return identity_confidence low and no signals.\n\n"
+    )
+
     return (
         "You are helping a deep-tech VC source potential academic founders.\n\n"
         f"{fund_block}"
-        f"Researcher: {context['name']}\n"
+        f"{critical_rule}"
+        f"Researcher: {researcher_name}\n"
         f"Known affiliation (may be missing): {context['affiliation']}\n"
         f"Known role: {context['role']}\n\n"
         f"Conference papers:\n{paper_block}\n\n"
+        f"{coauthor_block}"
         f"Known profiles:\n{profile_block}\n\n"
         "Step 1 — Resolve this exact person on the public web:\n"
+        "- Search using name + affiliation + distinctive paper titles to disambiguate homonyms.\n"
         "- Find their current affiliation and role (university, lab, PhD/postdoc/faculty).\n"
         "- Set identity_confidence to high only when name + affiliation + papers clearly match "
         "one person; medium if plausible but ambiguous; low if uncertain.\n"
         "- profile_url should be their best primary page (personal site, lab page, Google Scholar, "
-        "LinkedIn, or OpenReview) — use a real URL you found.\n\n"
+        "LinkedIn, or OpenReview) — use a real URL you found.\n"
+        "- linkedin_url and github_url must be profile pages for THIS person only. "
+        "Use URLs returned in your search citations; do not guess.\n\n"
         "Step 2 — Search for founder/commercialization evidence for THIS SAME PERSON:\n"
         "- founding or co-founding a startup,\n"
         "- commercializing research via a product or company website,\n"
@@ -280,45 +379,163 @@ def parse_perplexity_profile(
     confidence = _map_identity_confidence(str(profile.get("identity_confidence", "medium")))
     explanation = str(profile.get("identity_explanation") or "").strip()
     profile_url = _pick_source_url(str(profile.get("profile_url") or ""), citations)
-    linkedin_url = normalize_linkedin_profile_url(str(profile.get("linkedin_url") or ""))
+    linkedin_url = _accept_linkedin_from_search(
+        researcher.name,
+        str(profile.get("linkedin_url") or ""),
+        citations,
+    )
     if linkedin_url is None:
-        for candidate in (profile_url, *citations):
-            linkedin_url = normalize_linkedin_profile_url(str(candidate or ""))
+        for candidate in citations:
+            linkedin_url = _accept_linkedin_from_search(researcher.name, str(candidate or ""), citations)
             if linkedin_url:
                 break
 
-    github_url = normalize_github_profile_url(str(profile.get("github_url") or ""))
+    github_url = _accept_github_from_search(
+        researcher.name,
+        str(profile.get("github_url") or ""),
+        citations,
+    )
     if github_url is None:
-        for candidate in (profile_url, *citations):
-            github_url = normalize_github_profile_url(str(candidate or ""))
+        for candidate in citations:
+            github_url = _accept_github_from_search(researcher.name, str(candidate or ""), citations)
             if github_url:
                 break
 
-    updates: dict[str, Any] = {
-        "identity_confidence": confidence,
-        "identity_confidence_explanation": explanation
-        or f"Perplexity web search resolved profile for {researcher.name}.",
-    }
+    identity_ok = profile_identity_matches_researcher(researcher.name, profile)
+    updates: dict[str, Any] = {}
 
-    if affiliation and affiliation.lower() != "unknown":
-        updates["affiliation"] = affiliation[:200]
-    if role and role.lower() != "researcher" or role:
-        updates["role"] = role[:120]
+    if identity_ok:
+        updates["identity_confidence"] = confidence
+        updates["identity_confidence_explanation"] = (
+            explanation or f"Perplexity web search resolved profile for {researcher.name}."
+        )
+        if affiliation and affiliation.lower() != "unknown":
+            updates["affiliation"] = affiliation[:200]
+        if role and role.lower() != "researcher" or role:
+            updates["role"] = role[:120]
 
-    if profile_url and "openreview.net/profile" in profile_url.lower():
-        profile_id = profile_url.split("id=", 1)[-1]
-        updates["openreview_url"] = profile_url
-        if profile_id:
-            updates["openreview_profile_id"] = profile_id
-    elif profile_url:
-        updates["profile_url"] = profile_url
+        if profile_url and "openreview.net/profile" in profile_url.lower():
+            profile_id = profile_url.split("id=", 1)[-1]
+            updates["openreview_url"] = profile_url
+            if profile_id:
+                updates["openreview_profile_id"] = profile_id
+        elif profile_url:
+            updates["profile_url"] = profile_url
+    else:
+        updates["identity_confidence"] = IdentityConfidence.LOW
+        updates["identity_confidence_explanation"] = (
+            f"Rejected Perplexity profile: text refers to a different person than {researcher.name}."
+            + (f" ({explanation[:200]})" if explanation else "")
+        )
 
     if linkedin_url:
         updates["linkedin_url"] = linkedin_url
     if github_url:
-        login = github_url.rstrip("/").rsplit("/", 1)[-1]
-        updates["github_username"] = login
+        login = github_username_from_url(github_url)
+        if login:
+            updates["github_username"] = login
 
+    return researcher.model_copy(update=updates)
+
+
+def build_profile_link_search_prompt(context: dict[str, Any]) -> str:
+    """Prompt for a narrow LinkedIn/GitHub lookup retry."""
+    paper_lines = [
+        f"- {paper['title']} ({paper['conference']}, topic: {paper['topic']})" for paper in context.get("papers") or []
+    ]
+    paper_block = "\n".join(paper_lines) if paper_lines else "- No paper titles available."
+    known_lines = []
+    if context.get("openreview_url"):
+        known_lines.append(f"OpenReview: {context['openreview_url']}")
+    if context.get("profile_url"):
+        known_lines.append(f"Homepage: {context['profile_url']}")
+    if context.get("github_username"):
+        known_lines.append(f"GitHub: https://github.com/{context['github_username']}")
+    if context.get("linkedin_url"):
+        known_lines.append(f"LinkedIn: {context['linkedin_url']}")
+    known_block = "\n".join(known_lines) if known_lines else "No profile URLs on file."
+
+    return (
+        "Find the official LinkedIn and/or GitHub profile for one specific researcher.\n\n"
+        f"Name: {context['name']}\n"
+        f"Affiliation: {context['affiliation']}\n"
+        f"Role: {context['role']}\n\n"
+        f"Conference papers:\n{paper_block}\n\n"
+        f"Known pages:\n{known_block}\n\n"
+        "Instructions:\n"
+        "- Use name + affiliation + paper titles to disambiguate common names.\n"
+        "- Check the known homepage/OpenReview page for outbound LinkedIn/GitHub links when available.\n"
+        "- Return linkedin_url and github_url only when you found real profile pages in search results.\n"
+        "- Use empty strings when a profile was not found.\n"
+        "- Do NOT invent URLs.\n"
+        "Return JSON matching the provided schema."
+    )
+
+
+def retry_profile_links_with_perplexity(
+    researcher: Researcher,
+    context: dict[str, Any],
+    config: PerplexityConfig,
+) -> Researcher:
+    """Tier 2: run a link-only Sonar query for missing GitHub/LinkedIn profiles."""
+    if not config.api_key:
+        return researcher
+
+    prompt = build_profile_link_search_prompt(context)
+    with PerplexityClient(
+        api_key=config.api_key,
+        model=config.model,
+        request_delay_seconds=config.request_delay_seconds,
+    ) as client:
+        response = client._client.post(
+            "/v1/sonar",
+            json={
+                "model": client.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "profile_links",
+                        "schema": PROFILE_LINK_RESPONSE_SCHEMA,
+                    },
+                },
+            },
+        )
+        response.raise_for_status()
+        client._pause()
+        body = response.json()
+
+    citations = [str(url) for url in body.get("citations") or [] if url]
+    choices = body.get("choices") or []
+    if not choices:
+        return researcher
+
+    content = choices[0].get("message", {}).get("content") or ""
+    payload = _extract_json_object(content)
+
+    updates: dict[str, Any] = {}
+    if not researcher.linkedin_url:
+        linkedin = _accept_linkedin_from_search(
+            researcher.name,
+            str(payload.get("linkedin_url") or ""),
+            citations,
+        )
+        if linkedin:
+            updates["linkedin_url"] = linkedin
+
+    if not researcher.github_username:
+        github = _accept_github_from_search(
+            researcher.name,
+            str(payload.get("github_url") or ""),
+            citations,
+        )
+        if github:
+            login = github_username_from_url(github)
+            if login:
+                updates["github_username"] = login
+
+    if not updates:
+        return researcher
     return researcher.model_copy(update=updates)
 
 
@@ -348,6 +565,8 @@ def parse_perplexity_signals(
 
         description = str(item.get("description") or "").strip()
         if not description:
+            continue
+        if not signal_description_matches_researcher(researcher.name, description):
             continue
 
         source_url = _pick_source_url(str(item.get("source_url") or ""), citations)
@@ -456,12 +675,15 @@ def _query_researcher_intel(
     researcher: Researcher,
     papers_by_id: dict[str, Paper],
     config: PerplexityConfig,
+    *,
+    researchers_by_id: dict[str, Researcher] | None = None,
 ) -> tuple[Researcher, list[Signal]]:
     """Run one Perplexity query for profile resolution and founder signals."""
     context = build_researcher_context(
         researcher,
         papers_by_id,
         fund_context=config.fund_context,
+        researchers_by_id=researchers_by_id,
     )
     with PerplexityClient(
         api_key=config.api_key or "",
@@ -507,6 +729,7 @@ def enrich_researchers_with_perplexity(
         return researchers, []
 
     papers_by_id = {paper.id: paper for paper in papers}
+    researchers_by_id = {researcher.id: researcher for researcher in researchers}
     targets = _target_researchers_for_perplexity(researchers, config)
     updates_by_id: dict[str, Researcher] = {}
     signals: list[Signal] = []
@@ -515,7 +738,13 @@ def enrich_researchers_with_perplexity(
     worker_count = max(1, min(config.max_workers, len(targets)))
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {
-            executor.submit(_query_researcher_intel, researcher, papers_by_id, config): researcher
+            executor.submit(
+                _query_researcher_intel,
+                researcher,
+                papers_by_id,
+                config,
+                researchers_by_id=researchers_by_id,
+            ): researcher
             for researcher in targets
         }
         for future in as_completed(futures):

@@ -108,6 +108,7 @@ def run_reports(
     year: int = 2024,
     min_score: int = 0,
     include_clusters: bool = True,
+    cached_researchers: list | None = None,
 ) -> ReportResult:
     """Run the full pipeline and generate founder-monitoring reports."""
     scoring = run_scoring(
@@ -125,6 +126,7 @@ def run_reports(
         run_id=run_id,
         conference=conference,
         year=year,
+        cached_researchers=cached_researchers,
     )
     reports = generate_reports(
         scoring,

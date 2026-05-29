@@ -84,6 +84,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--force-refetch",
+        action="store_true",
+        help="Bypass cached OpenReview papers and fetch again",
+    )
     return parser
 
 
@@ -96,10 +101,12 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
-    if args.use_mock_signals:
-        import os
+    import os
 
+    if args.use_mock_signals:
         os.environ["LAB2STARTUP_USE_MOCK_SIGNALS"] = "true"
+    if args.force_refetch:
+        os.environ["LAB2STARTUP_FORCE_PAPER_REFETCH"] = "true"
     clear_settings_cache()
     settings = get_settings()
 
@@ -139,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
                 fund_profile=fund_id,
                 topics=topics,
                 settings=settings,
+                force_refetch=args.force_refetch,
             )
             run, result = batch_results[-1]
         else:
@@ -149,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
                 fund_profile=fund_id,
                 topics=topics,
                 settings=settings,
+                force_refetch=args.force_refetch,
             )
     except Exception as exc:
         logging.error("Run failed: %s", exc)

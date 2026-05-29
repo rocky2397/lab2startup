@@ -9,8 +9,9 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+from app.agents.profile_agent import build_profiles
 from app.agents.signal_agent import detect_signals
-from app.agents.signal_graph import _config_from_state, initialize_node, run_agentic_signal_graph
+from app.agents.signal_graph import _config_from_state, initialize_node, investigate_researcher_node, run_agentic_signal_graph
 from app.config import AgenticSignalConfig, clear_settings_cache
 from app.integrations.perplexity_agent import AgentInvestigationResult, PerplexityAgentClient
 from app.models import IdentityConfidence, Researcher, Signal, SignalType
@@ -270,3 +271,89 @@ def test_agentic_graph_early_exit_stops_queue(
 
     assert len(traces) == 1
     mock_client.investigate_researcher.assert_called_once()
+
+
+def test_investigate_researcher_node_falls_back_to_light_on_standard_400(
+    tmp_path: Path,
+    agent_completed_body: dict,
+) -> None:
+    profile = build_profiles()
+    researcher = profile.researchers[0]
+    config = AgenticSignalConfig(
+        enabled=True,
+        api_key="test-key",
+        db_path=tmp_path / "fallback.db",
+    )
+
+    failed_result = AgentInvestigationResult(
+        payload=None,
+        citations=[],
+        signals=[],
+        researcher=researcher,
+        status="failed",
+        steps_used=0,
+        tool_calls_count=0,
+        input_tokens=0,
+        output_tokens=0,
+        estimated_cost_usd=None,
+        summary="Agent investigation failed.",
+        request_json={"preset": "pro-search"},
+        response_json=None,
+        error_message="Agent API error 400: invalid tools configuration",
+    )
+    success_result = AgentInvestigationResult(
+        payload={},
+        citations=["https://example.com/founder"],
+        signals=[
+            Signal(
+                id="agent_fallback_1",
+                signal_type=SignalType.POSSIBLE_FOUNDER,
+                description="Founder evidence",
+                source_url="https://example.com/founder",
+                evidence_strength="medium",
+                date_found="2025-05-22",
+                researcher_name=researcher.name,
+            )
+        ],
+        researcher=researcher.model_copy(update={"affiliation": "Stanford University"}),
+        status="completed",
+        steps_used=1,
+        tool_calls_count=1,
+        input_tokens=10,
+        output_tokens=5,
+        estimated_cost_usd=0.01,
+        summary="Investigated with light fallback.",
+        request_json={"preset": "fast-search"},
+        response_json=agent_completed_body,
+    )
+
+    mock_client = MagicMock(spec=PerplexityAgentClient)
+    mock_client.investigate_researcher.side_effect = [failed_result, success_result]
+
+    state = {
+        "run_id": "run_fallback_test",
+        "current_researcher_id": researcher.id,
+        "researchers": profile.researchers[:3],
+        "papers": profile.papers,
+        "tier_by_researcher": {researcher.id: "standard"},
+        "agent_calls_used": 0,
+        "steps_used_total": 0,
+        "investigated_ids": [],
+        "researcher_updates": {},
+        "conference": "NeurIPS",
+        "year": 2025,
+        "db_path": config.db_path,
+        "api_key": config.api_key,
+    }
+
+    result = investigate_researcher_node(state, agent_client=mock_client, agentic_config=config)
+
+    assert mock_client.investigate_researcher.call_count == 2
+    assert len(result["traces"]) == 2
+    assert result["traces"][0]["status"] == "failed"
+    assert result["traces"][0]["tier"] == "standard"
+    assert result["traces"][1]["status"] == "completed"
+    assert result["traces"][1]["tier"] == "light"
+    assert "Light fallback after standard failed" in result["traces"][1]["summary"]
+    assert result["signals"]
+    assert result["errors"] == []

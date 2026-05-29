@@ -14,6 +14,9 @@ from app.integrations.perplexity_agent import (
     PerplexityAgentClient,
     _extract_citations,
     _extract_output_text,
+    _tools_for_tier,
+    is_retriable_tier_http_error,
+    should_fallback_to_light,
     tier_investigation_config,
 )
 from app.models import IdentityConfidence, Paper, Researcher
@@ -34,6 +37,33 @@ def test_extract_agent_response_text(agent_completed_body: dict) -> None:
     assert "Stanford University" in text
     citations = _extract_citations(agent_completed_body)
     assert "https://john-b-yang.github.io/" in citations
+
+
+def test_tools_for_tier_places_search_context_at_top_level() -> None:
+    web_tool = next(tool for tool in _tools_for_tier("standard") if tool.get("type") == "web_search")
+    assert web_tool["search_context_size"] == "medium"
+    assert "search_context_size" not in web_tool.get("filters", {})
+    assert web_tool["filters"]["search_recency_filter"] == "year"
+
+
+def test_should_fallback_to_light_on_http_400() -> None:
+    assert should_fallback_to_light("standard", "Agent API error 400: invalid preset")
+    assert should_fallback_to_light("deep", "Client error '422 Unprocessable Entity'")
+    assert not should_fallback_to_light("light", "Agent API error 400: bad request")
+    assert not should_fallback_to_light("standard", "Agent API error 500: server error")
+    assert is_retriable_tier_http_error("400 Bad Request")
+
+
+def test_post_agent_surfaces_response_body_on_400() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"message": "invalid tools configuration"}})
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport, base_url="https://api.perplexity.ai") as http_client:
+        client = PerplexityAgentClient(api_key="test-key", request_delay_seconds=0, max_retries=0)
+        client._client = http_client
+        with pytest.raises(httpx.HTTPStatusError, match="invalid tools configuration"):
+            client._post_agent({"input": "test"})
 
 
 def test_investigate_researcher_mock_transport(agent_completed_body: dict) -> None:

@@ -87,12 +87,27 @@ CREATE TABLE IF NOT EXISTS run_enrichment_audits (
 """
 
 
-def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
+def get_connection(
+    db_path: Path | str | None = None,
+    *,
+    readonly: bool = False,
+    timeout: float = 30.0,
+) -> sqlite3.Connection:
     """Open a SQLite connection with row factory enabled."""
     path = Path(db_path) if db_path else DEFAULT_DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path)
+    if readonly:
+        connection = sqlite3.connect(
+            f"file:{path.resolve()}?mode=ro",
+            uri=True,
+            timeout=timeout,
+        )
+    else:
+        connection = sqlite3.connect(path, timeout=timeout)
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA synchronous=NORMAL")
     connection.row_factory = sqlite3.Row
+    connection.execute(f"PRAGMA busy_timeout={int(timeout * 1000)}")
     return connection
 
 

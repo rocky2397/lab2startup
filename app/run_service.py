@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from app.agents.report_agent import ReportResult, run_reports
@@ -19,7 +19,10 @@ from app.integrations.openreview import OpenReviewConfig
 from app.models import Paper, PipelineRun
 from app.run_store import (
     create_run_record,
+    find_latest_run_with_papers,
     get_run,
+    load_papers_from_run,
+    load_researchers_from_run,
     load_run_result,
     make_run_id,
     mark_run_failed,
@@ -29,6 +32,12 @@ from app.run_store import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class PaperFetchResult:
+    papers: list[Paper] | None
+    reused_from_run_id: str | None = None
 
 
 def _resolve_fund(
@@ -130,9 +139,38 @@ def build_run_configs(
     }
 
 
-def _fetch_papers_for_run(configs: dict[str, object], fund: FundProfile | None) -> list[Paper] | None:
+def _fetch_papers_for_run(
+    configs: dict[str, object],
+    fund: FundProfile | None,
+    *,
+    db_path: Path | str | None = None,
+    force_refetch: bool = False,
+    fund_profile: str | None = None,
+) -> PaperFetchResult:
     """Fetch and optionally fund-filter papers before running the pipeline."""
     paper_source = configs["paper_source"]
+    if paper_source == "openreview" and not force_refetch and db_path is not None:
+        # Snapshots store post-fund-filter papers; match fund_profile when reusing.
+        prior = find_latest_run_with_papers(
+            conference=str(configs["conference"]),
+            year=int(configs["year"]),  # type: ignore[arg-type]
+            paper_source=paper_source,
+            fund_profile=fund_profile,
+            db_path=db_path,
+        )
+        if prior is not None:
+            papers = load_papers_from_run(prior.id, db_path=db_path)
+            if papers:
+                logger.info(
+                    "Reusing %s papers from prior run %s (%s %s via %s)",
+                    len(papers),
+                    prior.id,
+                    prior.conference,
+                    prior.year,
+                    paper_source,
+                )
+                return PaperFetchResult(papers=papers, reused_from_run_id=prior.id)
+
     if paper_source == "openreview":
         from app.integrations.openreview import fetch_papers_from_openreview
 
@@ -142,7 +180,7 @@ def _fetch_papers_for_run(configs: dict[str, object], fund: FundProfile | None) 
 
         papers = fetch_papers_from_openalex(configs["openalex_config"])  # type: ignore[arg-type]
     else:
-        return None
+        return PaperFetchResult(papers=None)
 
     if fund:
         before = len(papers)
@@ -153,7 +191,7 @@ def _fetch_papers_for_run(configs: dict[str, object], fund: FundProfile | None) 
             before,
             fund.name,
         )
-    return papers
+    return PaperFetchResult(papers=papers)
 
 
 def _enrich_openreview_config(
@@ -195,11 +233,14 @@ def execute_pipeline_run(
     db_path: Path | str | None = None,
     settings: AppSettings | None = None,
     include_clusters: bool = True,
+    force_refetch: bool | None = None,
 ) -> tuple[PipelineRun, ReportResult]:
     """Run the full pipeline and persist the snapshot to SQLite."""
     settings = settings or get_settings()
     db_path = db_path or settings.db_path
+    force_refetch = settings.force_paper_refetch if force_refetch is None else force_refetch
     fund = _resolve_fund(fund_profile, settings)
+    stored_fund_profile = fund.id if fund else fund_profile
 
     if fund:
         validate_conference_for_fund(conference, fund)
@@ -263,7 +304,25 @@ def execute_pipeline_run(
 
         papers_path = settings.papers_path if paper_source == "json" else None
         signals_path = settings.signals_path if settings.use_mock_signals else None
-        prefetched_papers = _fetch_papers_for_run(configs, fund)
+        paper_fetch = _fetch_papers_for_run(
+            configs,
+            fund,
+            db_path=db_path,
+            force_refetch=force_refetch,
+            fund_profile=stored_fund_profile,
+        )
+        cached_researchers = None
+        if paper_fetch.reused_from_run_id:
+            cached_researchers = load_researchers_from_run(
+                paper_fetch.reused_from_run_id,
+                db_path=db_path,
+            )
+            if cached_researchers:
+                logger.info(
+                    "Reusing enrichment for %s researchers from prior run %s",
+                    len(cached_researchers),
+                    paper_fetch.reused_from_run_id,
+                )
         openreview_config = _enrich_openreview_config(
             configs,
             conference=conference,
@@ -278,7 +337,8 @@ def execute_pipeline_run(
         result = run_reports(
             papers_path=papers_path,
             signals_path=signals_path,
-            papers=prefetched_papers,
+            papers=paper_fetch.papers,
+            cached_researchers=cached_researchers,
             openalex_config=configs["openalex_config"],  # type: ignore[arg-type]
             openreview_config=openreview_config,
             semantic_scholar_config=configs["semantic_scholar_config"],  # type: ignore[arg-type]
@@ -344,6 +404,7 @@ def execute_batch_pipeline_runs(
     db_path: Path | str | None = None,
     settings: AppSettings | None = None,
     include_clusters: bool = True,
+    force_refetch: bool | None = None,
 ) -> list[tuple[PipelineRun, ReportResult]]:
     """Run the pipeline for multiple conferences sequentially."""
     results: list[tuple[PipelineRun, ReportResult]] = []
@@ -360,6 +421,7 @@ def execute_batch_pipeline_runs(
                 db_path=db_path,
                 settings=settings,
                 include_clusters=include_clusters,
+                force_refetch=force_refetch,
             )
             results.append((run, result))
         except Exception as exc:

@@ -244,15 +244,34 @@ def _tools_for_tier(tier: InvestigationTier) -> list[dict[str, Any]]:
             tools.append(
                 {
                     "type": "web_search",
-                    "filters": {
-                        "search_recency_filter": "year",
-                        "search_context_size": TIER_SEARCH_CONTEXT.get(tier, "medium"),
-                    },
+                    "search_context_size": TIER_SEARCH_CONTEXT.get(tier, "medium"),
+                    "filters": {"search_recency_filter": "year"},
                 }
             )
         else:
             tools.append(tool)
     return tools
+
+
+def is_retriable_tier_http_error(error_message: str | None) -> bool:
+    """True when standard/deep should retry once at light tier."""
+    if not error_message:
+        return False
+    lowered = error_message.lower()
+    return any(
+        token in lowered
+        for token in (
+            "400",
+            "422",
+            "bad request",
+            "unprocessable entity",
+        )
+    )
+
+
+def should_fallback_to_light(tier: InvestigationTier, error_message: str | None) -> bool:
+    """Standard/deep preset failures often succeed at fast-search."""
+    return tier in {"standard", "deep"} and is_retriable_tier_http_error(error_message)
 
 
 class PerplexityAgentClient:
@@ -291,6 +310,14 @@ class PerplexityAgentClient:
         if self.request_delay_seconds:
             time.sleep(self.request_delay_seconds)
 
+    def _format_http_error(self, response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+            detail = json.dumps(payload)
+        except (json.JSONDecodeError, ValueError):
+            detail = response.text.strip() or response.reason_phrase
+        return f"Agent API error {response.status_code}: {detail}"
+
     def _post_agent(self, body: dict[str, Any]) -> dict[str, Any]:
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
@@ -299,7 +326,12 @@ class PerplexityAgentClient:
                 if response.status_code in {429, 500, 502, 503, 504} and attempt < self.max_retries:
                     time.sleep(2**attempt)
                     continue
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    raise httpx.HTTPStatusError(
+                        self._format_http_error(response),
+                        request=response.request,
+                        response=response,
+                    )
                 self._pause()
                 payload = response.json()
                 if not isinstance(payload, dict):
@@ -361,6 +393,7 @@ class PerplexityAgentClient:
         tier: InvestigationTier,
         config: AgentInvestigationConfig,
         tool_handlers: AgentToolHandlers,
+        researchers_by_id: dict[str, Researcher] | None = None,
     ) -> AgentInvestigationResult:
         """Run a tiered Agent API investigation for one researcher."""
         if tier == "skip" or config.max_steps <= 0:
@@ -384,6 +417,7 @@ class PerplexityAgentClient:
             researcher,
             papers_by_id,
             fund_context=config.fund_context,
+            researchers_by_id=researchers_by_id,
         )
         request_body = _build_request_body(context, tier=tier, config=config)
 

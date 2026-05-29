@@ -135,6 +135,7 @@ def detect_signals(
     conference: str = "Unknown",
     year: int = 2024,
     topic_scores: dict[str, int] | None = None,
+    cached_researchers: list | None = None,
 ) -> SignalDetectionResult:
     """Load profiles and attach commercialization signals."""
     profile_result = build_profiles(
@@ -154,8 +155,27 @@ def detect_signals(
         raw_signals = load_signals(signals_path)
 
     researchers = profile_result.researchers
+    if cached_researchers:
+        from dataclasses import replace
+
+        from app.researcher_enrichment import merge_researcher_enrichment
+
+        researchers = merge_researcher_enrichment(researchers, cached_researchers)
+        profile_result = replace(profile_result, researchers=researchers)
     pre_researchers = [researcher.model_copy(deep=True) for researcher in researchers]
     enrichment_audit: EnrichmentAudit | None = None
+    priority_ids: set[str] | None = None
+    link_retry_config = perplexity_config
+
+    from app.profile_link_discovery import (
+        discover_profile_links_tier0,
+        retry_missing_profile_links,
+    )
+
+    researchers = discover_profile_links_tier0(
+        researchers,
+        openreview_config=openreview_config,
+    )
 
     if agentic_signal_config is not None and agentic_signal_config.enabled:
         from app.agents.signal_coordinator import build_investigation_plan
@@ -176,6 +196,16 @@ def detect_signals(
             if agentic_signal_config.max_agent_calls <= 0
             else set(queue[: agentic_signal_config.max_agent_calls])
         )
+        priority_ids = targeted_ids
+        if link_retry_config is None and agentic_signal_config.api_key:
+            from app.integrations.perplexity import PerplexityConfig
+
+            link_retry_config = PerplexityConfig(
+                enabled=True,
+                api_key=agentic_signal_config.api_key,
+                fund_context=agentic_signal_config.fund_context,
+                enrich_profiles=False,
+            )
         skip_reason_by_id = {
             researcher.id: reason
             for researcher in researchers
@@ -203,6 +233,19 @@ def detect_signals(
         investigated_ids = {
             trace["researcher_id"] if isinstance(trace, dict) else trace.researcher_id for trace in traces
         }
+        investigation_status_by_id: dict[str, str] = {}
+        for trace in traces:
+            researcher_id = trace["researcher_id"] if isinstance(trace, dict) else trace.researcher_id
+            status = trace["status"] if isinstance(trace, dict) else trace.status
+            if status == "completed":
+                investigation_status_by_id[researcher_id] = "completed"
+            elif researcher_id not in investigation_status_by_id:
+                investigation_status_by_id[researcher_id] = status
+        investigation_failed_ids = {
+            researcher_id
+            for researcher_id, status in investigation_status_by_id.items()
+            if status == "failed"
+        }
         enrichment_audit = build_enrichment_audit(
             run_id=run_id,
             mode=EnrichmentMode.AGENTIC,
@@ -211,6 +254,7 @@ def detect_signals(
             signals=agent_signals,
             targeted_ids=targeted_ids,
             investigated_ids=investigated_ids,
+            investigation_failed_ids=investigation_failed_ids,
             tier_by_id=tiers,
             skip_reason_by_id=skip_reason_by_id,
             config_summary={
@@ -232,6 +276,7 @@ def detect_signals(
 
         targeted = _target_researchers_for_perplexity(researchers, perplexity_config)
         targeted_ids = {researcher.id for researcher in targeted}
+        priority_ids = targeted_ids
         skip_reason_by_id: dict[str, str] = {}
         if perplexity_config.max_researchers > 0:
             skip_reason_by_id = {
@@ -272,6 +317,13 @@ def detect_signals(
             signals=[],
             config_summary={"note": "No Perplexity or agentic enrichment enabled"},
         )
+
+    researchers = retry_missing_profile_links(
+        researchers,
+        profile_result.papers,
+        perplexity_config=link_retry_config,
+        priority_ids=priority_ids,
+    )
 
     # GitHub is optional — OSS momentum supplement keyed off paper titles.
     if github_config is not None and github_config.enabled:

@@ -50,6 +50,69 @@ def test_build_enrichment_audit_tracks_affiliation_resolution() -> None:
     assert audit.records[0].status == "enriched"
 
 
+def test_build_enrichment_audit_distinguishes_investigation_outcomes() -> None:
+    from app.models import EvidenceStrength, Signal, SignalType
+
+    pre = Researcher(
+        id="researcher_a",
+        name="Ada Lovelace",
+        affiliation="Unknown",
+        role="Researcher",
+        papers=["paper_1"],
+    )
+    post = pre.model_copy(deep=True)
+    failed = Researcher(
+        id="researcher_b",
+        name="Grace Hopper",
+        affiliation="Unknown",
+        role="Researcher",
+        papers=["paper_2"],
+    )
+    signal = Signal(
+        id="agent_signal_1",
+        signal_type=SignalType.POSSIBLE_FOUNDER,
+        description="Stealth startup",
+        source_url="https://example.com",
+        evidence_strength=EvidenceStrength.MEDIUM,
+        date_found="2025-05-22",
+        researcher_id=pre.id,
+        researcher_name=pre.name,
+    )
+
+    audit = build_enrichment_audit(
+        run_id="run_test",
+        mode=EnrichmentMode.AGENTIC,
+        pre_researchers=[pre, failed],
+        post_researchers=[post, failed],
+        signals=[signal],
+        targeted_ids={pre.id, failed.id},
+        investigated_ids={pre.id, failed.id},
+        investigation_failed_ids={failed.id},
+    )
+
+    by_id = {record.researcher_id: record for record in audit.records}
+    assert by_id[pre.id].status == "investigated_with_signals"
+    assert by_id[failed.id].status == "investigation_failed"
+
+    no_signal_pre = Researcher(
+        id="researcher_c",
+        name="Alan Turing",
+        affiliation="Unknown",
+        role="Researcher",
+        papers=["paper_3"],
+    )
+    no_signal_audit = build_enrichment_audit(
+        run_id="run_test",
+        mode=EnrichmentMode.AGENTIC,
+        pre_researchers=[no_signal_pre],
+        post_researchers=[no_signal_pre],
+        signals=[],
+        targeted_ids={no_signal_pre.id},
+        investigated_ids={no_signal_pre.id},
+    )
+    assert no_signal_audit.records[0].status == "investigated_no_signal"
+
+
 def test_summarize_enrichment_audit_lists_profile_names() -> None:
     pre = Researcher(
         id="researcher_a",

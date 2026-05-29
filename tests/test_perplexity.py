@@ -75,6 +75,67 @@ def test_build_researcher_context() -> None:
     assert "OpenReview" in build_founder_search_prompt(context)
 
 
+def test_parse_perplexity_profile_rejects_wrong_person() -> None:
+    researcher = Researcher(
+        id="researcher_heinrich_kuttler",
+        name="Heinrich Küttler",
+        affiliation="Unknown",
+        role="Researcher",
+        identity_confidence=IdentityConfidence.MEDIUM,
+    )
+    payload = {
+        "profile": {
+            "affiliation": "Institute for Artificial Intelligence, Peking University",
+            "role": "Researcher",
+            "identity_confidence": "high",
+            "profile_url": "https://example.com/xingang",
+            "identity_explanation": "Xingang Peng is a researcher associated with Peking University.",
+        },
+        "signals": [],
+    }
+    updated = parse_perplexity_profile(
+        payload,
+        researcher=researcher,
+        citations=["https://example.com/xingang"],
+    )
+    assert updated.affiliation == "Unknown"
+    assert updated.identity_confidence == IdentityConfidence.LOW
+    assert "different person" in updated.identity_confidence_explanation.lower()
+
+
+def test_parse_perplexity_signals_rejects_wrong_person_description() -> None:
+    researcher = Researcher(
+        id="researcher_heinrich_kuttler",
+        name="Heinrich Küttler",
+        affiliation="Unknown",
+        role="Researcher",
+    )
+    payload = {
+        "profile": {
+            "affiliation": "Unknown",
+            "role": "Researcher",
+            "identity_confidence": "low",
+            "profile_url": "https://example.com/no-signal",
+            "identity_explanation": "No public profile found.",
+        },
+        "signals": [
+            {
+                "signal_type": "commercialization",
+                "description": "Xingang Peng is a prominent researcher in AI-driven drug discovery.",
+                "source_url": "https://example.com/article",
+                "evidence_strength": "medium",
+            }
+        ],
+    }
+    signals = parse_perplexity_signals(
+        payload,
+        researcher=researcher,
+        citations=["https://example.com/article"],
+        max_signals=2,
+    )
+    assert signals == []
+
+
 def test_parse_perplexity_profile(perplexity_response: dict) -> None:
     researcher = Researcher(
         id="researcher_john_yang",

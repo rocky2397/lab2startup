@@ -82,6 +82,7 @@ def run_scoring(
     run_id: str | None = None,
     conference: str = "Unknown",
     year: int = 2024,
+    cached_researchers: list | None = None,
 ) -> ScoringResult:
     """Run the full pipeline through scoring."""
     detection = detect_signals(
@@ -99,6 +100,7 @@ def run_scoring(
         conference=conference,
         year=year,
         topic_scores=topic_scores,
+        cached_researchers=cached_researchers,
     )
     return compute_scores(detection, topic_scores=topic_scores)
 

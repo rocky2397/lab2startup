@@ -305,7 +305,7 @@ def pick_preferred_run_id(
 
 def list_runs(*, db_path: str | Path | None = None, limit: int = 50) -> list[PipelineRun]:
     init_db(db_path)
-    with get_connection(db_path) as connection:
+    with get_connection(db_path, readonly=True) as connection:
         rows = connection.execute(
             """
             SELECT * FROM pipeline_runs
@@ -319,7 +319,7 @@ def list_runs(*, db_path: str | Path | None = None, limit: int = 50) -> list[Pip
 
 def get_run(run_id: str, *, db_path: str | Path | None = None) -> PipelineRun | None:
     init_db(db_path)
-    with get_connection(db_path) as connection:
+    with get_connection(db_path, readonly=True) as connection:
         row = connection.execute(
             "SELECT * FROM pipeline_runs WHERE id = ?",
             (run_id,),
@@ -334,7 +334,7 @@ def get_latest_run(*, db_path: str | Path | None = None) -> PipelineRun | None:
 
 def load_run_result(run_id: str, *, db_path: str | Path | None = None) -> ReportResult | None:
     init_db(db_path)
-    with get_connection(db_path) as connection:
+    with get_connection(db_path, readonly=True) as connection:
         row = connection.execute(
             "SELECT snapshot_json FROM run_snapshots WHERE run_id = ?",
             (run_id,),
@@ -349,3 +349,65 @@ def load_latest_run_result(*, db_path: str | Path | None = None) -> ReportResult
     if latest is None or latest.status != RunStatus.COMPLETE:
         return None
     return load_run_result(latest.id, db_path=db_path)
+
+
+def find_latest_run_with_papers(
+    *,
+    conference: str,
+    year: int,
+    paper_source: str,
+    fund_profile: str | None = None,
+    db_path: str | Path | None = None,
+) -> PipelineRun | None:
+    """Return the newest complete run with papers for the same fetch key."""
+    init_db(db_path)
+    with get_connection(db_path, readonly=True) as connection:
+        row = connection.execute(
+            """
+            SELECT * FROM pipeline_runs
+            WHERE conference = ?
+              AND year = ?
+              AND paper_source = ?
+              AND status = ?
+              AND paper_count > 0
+              AND (
+                (fund_profile IS NULL AND ? IS NULL)
+                OR fund_profile = ?
+              )
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (
+                conference,
+                year,
+                paper_source,
+                RunStatus.COMPLETE.value,
+                fund_profile,
+                fund_profile,
+            ),
+        ).fetchone()
+    return _row_to_pipeline_run(row) if row else None
+
+
+def load_papers_from_run(
+    run_id: str,
+    *,
+    db_path: str | Path | None = None,
+) -> list[Paper] | None:
+    """Load post-fetch papers from a stored run snapshot."""
+    result = load_run_result(run_id, db_path=db_path)
+    if result is None:
+        return None
+    return list(result.scoring.detection.papers)
+
+
+def load_researchers_from_run(
+    run_id: str,
+    *,
+    db_path: str | Path | None = None,
+) -> list[Researcher] | None:
+    """Load enriched researchers from a stored run snapshot."""
+    result = load_run_result(run_id, db_path=db_path)
+    if result is None:
+        return None
+    return list(result.scoring.detection.researchers)

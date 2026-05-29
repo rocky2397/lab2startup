@@ -149,9 +149,9 @@ def render_run_context_header(
         scope = f"Live dataset · papers from **{run_conference} {run_year}** via `{paper_source}`"
 
     if filter_bits:
-        st.info(f"{scope} · Showing subset filtered by {', '.join(filter_bits)}.")
+        st.caption(f"{scope} · Filtered by {', '.join(filter_bits)}.")
     else:
-        st.info(scope)
+        st.caption(scope)
 
 
 def render_researcher_context_card(
@@ -190,3 +190,55 @@ def render_researcher_context_card(
 
     if conference_year and len(context["conferences"]) != 1:  # type: ignore[index]
         st.caption(f"Conference coverage: {conference_year}")
+
+
+def render_researcher_quick_view(
+    *,
+    report: Report,
+    researcher: Researcher | None,
+    papers_by_id: dict[str, Paper],
+    expanded: bool = True,
+) -> None:
+    """Compact profile card with signals — used from tables and leaderboard."""
+    from app.report_generator import RECOMMENDATION_LABELS
+    from dashboard.researcher_links_ui import render_researcher_profile_links
+
+    title = f"Quick view — {report.researcher_or_cluster} ({report.startup_likelihood_score}/100)"
+    with st.expander(title, expanded=expanded):
+        if researcher:
+            ctx = researcher_paper_context(researcher, papers_by_id)
+            conference_year = format_conference_year_label(
+                ctx["conferences"],  # type: ignore[arg-type]
+                ctx["years"],  # type: ignore[arg-type]
+            )
+            region = infer_region_hint(researcher.affiliation)
+            st.write(
+                f"**Recommendation:** {RECOMMENDATION_LABELS[report.recommendation]}  \n"
+                f"**Conference / year:** {conference_year}  \n"
+                f"**Affiliation:** {researcher.affiliation}  \n"
+                f"**Region:** {region or 'Unknown'}  \n"
+                f"**Role:** {researcher.role}  \n"
+                f"**Signals:** {len(report.signals)}"
+            )
+            render_researcher_profile_links(
+                researcher,
+                report.signals,
+                label="Links",
+            )
+        else:
+            st.write(
+                f"**Recommendation:** {RECOMMENDATION_LABELS[report.recommendation]}  \n"
+                f"**Signals:** {len(report.signals)}"
+            )
+
+        if report.signals:
+            for signal in report.signals[:3]:
+                st.markdown(
+                    f"- **{signal.signal_type.value.replace('_', ' ').title()}** — "
+                    f"{signal.description[:160]}{'…' if len(signal.description) > 160 else ''}  \n"
+                    f"  [Source]({signal.source_url})"
+                )
+        elif researcher:
+            st.caption("No commercialization signals detected for this researcher in this run.")
+
+        st.caption("Open **Explore & details** for the full report and score breakdown.")

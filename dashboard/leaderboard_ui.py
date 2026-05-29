@@ -6,10 +6,10 @@ import streamlit as st
 
 from app.models import VCAction
 from app.report_generator import RECOMMENDATION_LABELS
+from dashboard.candidate_table_ui import render_selectable_reports_table
 from dashboard.context_ui import (
-    format_conference_year_label,
     infer_region_hint,
-    researcher_paper_context,
+    render_researcher_quick_view,
 )
 from dashboard.leaderboard import (
     LeaderboardEntry,
@@ -18,7 +18,6 @@ from dashboard.leaderboard import (
     leaderboard_dataframe,
     take_meeting_reports,
 )
-from dashboard.researcher_links_ui import render_researcher_profile_links
 
 
 def _recommendation_badge(recommendation: VCAction) -> str:
@@ -31,7 +30,7 @@ def _recommendation_badge(recommendation: VCAction) -> str:
     return badges.get(recommendation, recommendation.value)
 
 
-def render_top_prospect_cards(entries: list[LeaderboardEntry], *, columns: int = 3) -> None:
+def render_top_prospect_cards(entries: list[LeaderboardEntry]) -> None:
     """Render compact cards for the top few candidates."""
     if not entries:
         st.info("No ranked researchers yet. Run the pipeline to populate scores.")
@@ -50,6 +49,13 @@ def render_top_prospect_cards(entries: list[LeaderboardEntry], *, columns: int =
                 region_label = f" · {region}" if region else ""
                 st.caption(f"{entry.conference_year} · {affiliation}{region_label} · {entry.top_signal_label}")
                 st.write(_recommendation_badge(entry.report.recommendation))
+                if st.button(
+                    "View in Explore tab",
+                    key=f"quick_view_podium_{entry.report.id}",
+                    use_container_width=True,
+                ):
+                    st.session_state.selected_report_id = entry.report.id
+                    st.rerun()
 
 
 def render_top_prospects_board(
@@ -64,8 +70,8 @@ def render_top_prospects_board(
     """Render the main highest-potential view. Returns selected report ID if any."""
     st.subheader("Highest potential researchers")
     st.caption(
-        "Ranked by startup likelihood score — combine research quality, applied relevance, "
-        "team network, Perplexity signals, and recency."
+        "Ranked by startup likelihood score — research quality, applied relevance, "
+        "team network, enrichment signals, and recency."
     )
 
     top_n = st.slider("Show top N researchers", min_value=5, max_value=25, value=10, step=1)
@@ -83,6 +89,7 @@ def render_top_prospects_board(
         st.warning("No researcher scores available for this run.")
         return None
 
+    papers_by_id = {paper.id: paper for paper in papers}
     all_researcher_reports = [report for report in reports if report.id.startswith("report_researcher_")]
     rec_counts = count_by_recommendation(all_researcher_reports)
     metric_cols = st.columns(4)
@@ -113,58 +120,28 @@ def render_top_prospects_board(
 
     st.markdown("#### Full leaderboard")
     display_df = chart_df.drop(columns=["Report ID"])
-    st.dataframe(display_df, width="stretch", hide_index=True)
-
+    table_rows = display_df.to_dict(orient="records")
     report_ids = [entry.report.id for entry in entries]
-    selected_report_id = st.selectbox(
-        "Open candidate profile",
+
+    current_id = st.session_state.get("selected_report_id")
+    if current_id not in report_ids:
+        current_id = report_ids[0] if report_ids else None
+
+    selected_report_id = render_selectable_reports_table(
+        table_rows,
         report_ids,
-        format_func=lambda report_id: next(
-            entry.report.researcher_or_cluster for entry in entries if entry.report.id == report_id
-        ),
-        key="top_prospect_select",
+        key="top_prospects_table",
+        selected_report_id=current_id,
     )
+    if selected_report_id:
+        st.session_state.selected_report_id = selected_report_id
 
     selected = next(entry for entry in entries if entry.report.id == selected_report_id)
-    with st.expander(
-        f"Quick view — {selected.report.researcher_or_cluster} ({selected.report.startup_likelihood_score}/100)",
-        expanded=False,
-    ):
-        if selected.researcher:
-            ctx = researcher_paper_context(
-                selected.researcher,
-                {paper.id: paper for paper in papers},
-            )
-            cy = format_conference_year_label(
-                ctx["conferences"],  # type: ignore[arg-type]
-                ctx["years"],  # type: ignore[arg-type]
-            )
-            region = infer_region_hint(selected.researcher.affiliation)
-            st.write(
-                f"**Recommendation:** {RECOMMENDATION_LABELS[selected.report.recommendation]}  \n"
-                f"**Conference / year:** {cy}  \n"
-                f"**Affiliation:** {selected.researcher.affiliation}  \n"
-                f"**Region:** {region or 'Unknown'}  \n"
-                f"**Role:** {selected.researcher.role}  \n"
-                f"**Signals:** {len(selected.report.signals)}"
-            )
-            render_researcher_profile_links(
-                selected.researcher,
-                selected.report.signals,
-                label="Links",
-            )
-        else:
-            st.write(
-                f"**Recommendation:** {RECOMMENDATION_LABELS[selected.report.recommendation]}  \n"
-                f"**Signals:** {len(selected.report.signals)}"
-            )
-        if selected.report.signals:
-            for signal in selected.report.signals[:3]:
-                st.markdown(
-                    f"- **{signal.signal_type.value.replace('_', ' ').title()}** — "
-                    f"{signal.description[:160]}{'…' if len(signal.description) > 160 else ''}  \n"
-                    f"  [Source]({signal.source_url})"
-                )
-        st.caption("Switch to **Explore & details** for full score breakdown and report.")
+    render_researcher_quick_view(
+        report=selected.report,
+        researcher=selected.researcher,
+        papers_by_id=papers_by_id,
+        expanded=True,
+    )
 
     return selected_report_id

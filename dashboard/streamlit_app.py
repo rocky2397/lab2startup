@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from dashboard.agent_trace_ui import (
     render_run_trace_summary,
     run_uses_agentic_signals,
 )
+from dashboard.candidate_table_ui import render_selectable_reports_table
 from dashboard.context_ui import (
     format_conference_year_label,
     infer_region_hint,
@@ -183,7 +185,16 @@ def main() -> None:
     fund_conferences = fund.conference_names if fund else ["NeurIPS"]
     default_conference = fund_conferences[0] if fund_conferences else "NeurIPS"
 
-    stored_runs = list_runs(db_path=settings.db_path, limit=30)
+    try:
+        stored_runs = list_runs(db_path=settings.db_path, limit=30)
+    except sqlite3.OperationalError as exc:
+        st.error(f"Could not open the run database: {exc}")
+        st.info(
+            "This is usually transient. Stop any running pipeline, ensure you have free disk space "
+            "(SQLite needs room for journal files), wait a few seconds, then refresh. "
+            f"Database path: `{settings.db_path}`"
+        )
+        st.stop()
     complete_runs = [run for run in stored_runs if run.status == RunStatus.COMPLETE]
 
     if "selected_run_id" not in st.session_state:
@@ -371,6 +382,12 @@ def main() -> None:
 
         st.divider()
         st.header("Filters")
+        show_dev_tools = st.checkbox(
+            "Show developer tools",
+            value=st.session_state.get("show_dev_tools", False),
+            help="Enrichment audit, agent investigation traces, and raw config.",
+        )
+        st.session_state.show_dev_tools = show_dev_tools
 
     result = load_pipeline(
         force_refresh=st.session_state.pop("do_refresh", False),
@@ -407,20 +424,25 @@ def main() -> None:
         None,
     )
 
-    if active_run:
+    if active_run and st.session_state.get("show_dev_tools"):
         from app.run_store import load_enrichment_audit
 
         enrichment_audit = load_enrichment_audit(active_run.id, db_path=settings.db_path)
-        render_enrichment_audit_panel(enrichment_audit)
+        with st.expander("Enrichment audit", expanded=False):
+            render_enrichment_audit_panel(enrichment_audit)
 
         agentic_run = run_uses_agentic_signals(active_run.config_json)
         if agentic_run:
             from app.agent_trace_store import summarize_run_traces
 
             trace_summary = summarize_run_traces(active_run.id, db_path=settings.db_path)
-            st.caption(f"Signal mode: **Agentic (LangGraph)** · {format_cost_caption(trace_summary)}")
-        elif settings.agentic_signal_config.enabled:
-            st.caption("Current env enables agentic signals; this stored run used Sonar.")
+            with st.expander("Run investigation summary", expanded=False):
+                st.caption(format_cost_caption(trace_summary))
+                render_run_trace_summary(
+                    active_run.id,
+                    db_path=settings.db_path,
+                    agentic_enabled=True,
+                )
 
     filter_ns = st.session_state.get("loaded_run_id") or "default"
 
@@ -434,8 +456,6 @@ def main() -> None:
             key=f"min_score_{filter_ns}",
         )
         st.session_state.dashboard_min_score = min_score
-        if min_score >= 60:
-            st.caption("Tip: lower to 40 or 0 if this run has few/no Perplexity signals yet.")
         recommendation_label = st.selectbox(
             "Recommendation",
             ["All"] + [label for label, _ in rec_options],
@@ -554,7 +574,16 @@ def main() -> None:
                     }
                     for report in filtered_reports[:15]
                 ]
-                st.dataframe(pd.DataFrame(cluster_rows), width="stretch", hide_index=True)
+                cluster_ids = [report.id for report in filtered_reports[:15]]
+                selected_cluster_id = render_selectable_reports_table(
+                    cluster_rows,
+                    cluster_ids,
+                    key="cluster_top_table",
+                    selected_report_id=st.session_state.get("selected_report_id"),
+                    caption="Click a cluster row to explore it in the details tab.",
+                )
+                if selected_cluster_id:
+                    st.session_state.selected_report_id = selected_cluster_id
 
     with tab_explore:
         if not filtered_reports:
@@ -569,6 +598,7 @@ def main() -> None:
             run_id=st.session_state.selected_run_id,
             db_path=settings.db_path,
             config_json=active_run.config_json if active_run else {},
+            show_dev_tools=st.session_state.get("show_dev_tools", False),
         )
 
 
@@ -582,6 +612,7 @@ def _render_explore_tab(
     run_id: str | None,
     db_path,
     config_json: dict,
+    show_dev_tools: bool = False,
 ) -> None:
     if "selected_report_id" in st.session_state:
         preferred = st.session_state.selected_report_id
@@ -617,7 +648,6 @@ def _render_explore_tab(
             "Priority": report.priority_band.value.replace("_", " ").title(),
             "Recommendation": RECOMMENDATION_LABELS[report.recommendation],
             "Signals": len(report.signals),
-            "Report ID": report.id,
         }
         if view_mode == "Researchers":
             researcher_id = researcher_id_from_report_id(report.id)
@@ -631,91 +661,59 @@ def _render_explore_tab(
                 row["Affiliation"] = researcher.affiliation
                 row["Region"] = infer_region_hint(researcher.affiliation) or "—"
         table_rows.append(row)
+
     st.subheader("Ranked candidates")
-    if run_id:
-        render_run_trace_summary(
-            run_id,
-            db_path=db_path,
-            agentic_enabled=run_uses_agentic_signals(config_json),
-        )
-    st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
-
     report_ids = [report.id for report in filtered_reports]
-    selected_report_id = st.selectbox(
-        "Select candidate for details",
-        report_ids,
-        index=default_index,
-        format_func=lambda report_id: next(
-            report.researcher_or_cluster for report in filtered_reports if report.id == report_id
-        ),
-    )
-    st.session_state.selected_report_id = selected_report_id
-    selected_report = next(report for report in filtered_reports if report.id == selected_report_id)
+    current_id = st.session_state.get("selected_report_id")
+    if current_id not in report_ids:
+        current_id = report_ids[default_index]
 
+    selected_report_id = render_selectable_reports_table(
+        table_rows,
+        report_ids,
+        key="explore_candidates_table",
+        selected_report_id=current_id,
+    )
+    if selected_report_id:
+        st.session_state.selected_report_id = selected_report_id
+
+    selected_report = next(report for report in filtered_reports if report.id == selected_report_id)
+    researcher = None
     if view_mode == "Researchers":
         researcher_id = researcher_id_from_report_id(selected_report.id)
         if researcher_id:
-            researcher = next(
-                (r for r in detection.researchers if r.id == researcher_id),
-                None,
-            )
-            if researcher:
-                render_researcher_context_card(
-                    researcher=researcher,
-                    report=selected_report,
-                    papers_by_id=papers_by_id,
-                )
-                render_researcher_profile_links(
-                    researcher,
-                    selected_report.signals,
-                )
+            researcher = researchers_by_id.get(researcher_id)
 
-    detail_col1, detail_col2, detail_col3 = st.columns(3)
-    detail_col1.metric("Score", selected_report.startup_likelihood_score)
-    detail_col2.metric(
-        "Priority",
-        selected_report.priority_band.value.replace("_", " ").title(),
-    )
-    detail_col3.metric(
-        "Recommendation",
-        RECOMMENDATION_LABELS[selected_report.recommendation],
-    )
+    if view_mode == "Researchers" and researcher:
+        render_researcher_context_card(
+            researcher=researcher,
+            report=selected_report,
+            papers_by_id=papers_by_id,
+        )
+        render_researcher_profile_links(
+            researcher,
+            selected_report.signals,
+        )
+    elif view_mode != "Researchers":
+        st.markdown(f"### {selected_report.researcher_or_cluster}")
+        st.metric("Score", selected_report.startup_likelihood_score)
 
     breakdown_df = score_breakdown_dataframe(selected_report)
-    preview_col1, preview_col2 = st.columns([1, 1])
-    with preview_col1:
-        st.caption("Score components (expand below for full methodology)")
-        st.bar_chart(breakdown_df.set_index("Component")["Score"], height=220)
-    with preview_col2:
-        if view_mode == "Researchers":
-            researcher_id = researcher_id_from_report_id(selected_report.id)
-            if researcher_id:
-                researcher = next(r for r in detection.researchers if r.id == researcher_id)
-                st.markdown("**Profile details**")
-                region = infer_region_hint(researcher.affiliation)
-                st.write(f"Affiliation: {researcher.affiliation}")
-                if region:
-                    st.write(f"Region: {region}")
-                st.write(f"Role: {researcher.role}")
-                st.write(f"Identity confidence: {researcher.identity_confidence.value}")
-                st.write(f"Signals attached: {len(selected_report.signals)}")
-        else:
-            st.markdown("**Cluster view**")
-            st.write(f"Signals attached: {len(selected_report.signals)}")
-            st.caption("Expand **Sources & detected signals** below for links.")
+    st.subheader("Score breakdown")
+    st.bar_chart(breakdown_df.set_index("Component")["Score"], height=220)
 
-    st.subheader("Generated report")
+    st.subheader("Report")
     st.markdown(render_report_markdown(selected_report))
 
-    st.divider()
-    st.subheader("Details")
-    render_scoring_methodology_expander(
-        fund=fund,
-        topic_scores=topic_scores,
-    )
-    render_candidate_score_breakdown_expander(selected_report)
-    render_signal_sources_expander(selected_report.signals)
-    if view_mode == "Researchers" and run_id:
+    with st.expander("Score methodology & signal sources", expanded=False):
+        render_scoring_methodology_expander(
+            fund=fund,
+            topic_scores=topic_scores,
+        )
+        render_candidate_score_breakdown_expander(selected_report)
+        render_signal_sources_expander(selected_report.signals)
+
+    if show_dev_tools and view_mode == "Researchers" and run_id:
         researcher_id = researcher_id_from_report_id(selected_report.id)
         if researcher_id:
             render_researcher_trace_expander(

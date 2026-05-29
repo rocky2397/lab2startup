@@ -69,6 +69,7 @@ class AppSettings:
     pipeline_cache_enabled: bool
     pipeline_cache_dir: Path
     pipeline_cache_ttl_hours: float
+    force_paper_refetch: bool
 
     @property
     def is_production(self) -> bool:
@@ -285,6 +286,10 @@ def get_settings() -> AppSettings:
         ),
         pipeline_cache_dir=pipeline_cache_dir,
         pipeline_cache_ttl_hours=float(os.getenv("LAB2STARTUP_PIPELINE_CACHE_TTL_HOURS", "168")),
+        force_paper_refetch=_parse_bool(
+            os.getenv("LAB2STARTUP_FORCE_PAPER_REFETCH"),
+            default=False,
+        ),
     )
 
 
