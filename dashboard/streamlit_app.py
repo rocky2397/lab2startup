@@ -35,6 +35,15 @@ from dashboard.agent_trace_ui import (
     run_uses_agentic_signals,
 )
 from dashboard.candidate_table_ui import render_selectable_reports_table
+from dashboard.diff_ui import render_changes_since_last_run
+from dashboard.thesis_fit_ui import (
+    europe_nexus_filter_options,
+    render_thesis_fit_badges,
+    render_thesis_fit_dev_panel,
+    report_passes_thesis_fit_filter,
+    thesis_fit_filter_options,
+    thesis_fit_label,
+)
 from dashboard.context_ui import (
     format_conference_year_label,
     infer_region_hint,
@@ -382,6 +391,19 @@ def main() -> None:
 
         st.divider()
         st.header("Filters")
+        thesis_fit_filter = "All"
+        europe_filter = "All"
+        if fund and fund.thesis_fit:
+            thesis_fit_filter = st.selectbox(
+                "Backtrace fit",
+                thesis_fit_filter_options(),
+                key="thesis_fit_filter",
+            )
+            europe_filter = st.selectbox(
+                "Europe nexus",
+                europe_nexus_filter_options(),
+                key="europe_nexus_filter",
+            )
         show_dev_tools = st.checkbox(
             "Show developer tools",
             value=st.session_state.get("show_dev_tools", False),
@@ -503,6 +525,23 @@ def main() -> None:
         topic_filter=topic_filter,
     )
 
+    thesis_assessments = None
+    run_diff = None
+    if active_run:
+        from app.run_diff_store import load_run_diff
+        from app.thesis_fit_store import load_thesis_fit
+
+        run_diff = load_run_diff(active_run.id, db_path=settings.db_path)
+        thesis_assessments = load_thesis_fit(active_run.id, db_path=settings.db_path)
+
+    if view_mode == "Researchers":
+        selected_from_diff = render_changes_since_last_run(
+            run_diff,
+            selected_report_id=st.session_state.get("selected_report_id"),
+        )
+        if selected_from_diff:
+            st.session_state.selected_report_id = selected_from_diff
+
     if view_mode == "Researchers":
         filtered_reports = filter_researcher_reports(
             result.reports,
@@ -514,6 +553,19 @@ def main() -> None:
             year=year_filter,
             topic=topic_filter,
         )
+        if fund and fund.thesis_fit and thesis_assessments is not None:
+            fit_filter = st.session_state.get("thesis_fit_filter", "All")
+            europe_filter = st.session_state.get("europe_nexus_filter", "All")
+            filtered_reports = [
+                report
+                for report in filtered_reports
+                if report_passes_thesis_fit_filter(
+                    researcher_id_from_report_id(report.id) or "",
+                    thesis_assessments,
+                    fit_filter=fit_filter,
+                    europe_filter=europe_filter,
+                )
+            ]
     else:
         filtered_reports = filter_cluster_reports(
             result.reports,
@@ -599,6 +651,7 @@ def main() -> None:
             db_path=settings.db_path,
             config_json=active_run.config_json if active_run else {},
             show_dev_tools=st.session_state.get("show_dev_tools", False),
+            thesis_assessments=thesis_assessments,
         )
 
 
@@ -613,6 +666,7 @@ def _render_explore_tab(
     db_path,
     config_json: dict,
     show_dev_tools: bool = False,
+    thesis_assessments=None,
 ) -> None:
     if "selected_report_id" in st.session_state:
         preferred = st.session_state.selected_report_id
@@ -660,6 +714,9 @@ def _render_explore_tab(
                 )
                 row["Affiliation"] = researcher.affiliation
                 row["Region"] = infer_region_hint(researcher.affiliation) or "—"
+                if thesis_assessments and researcher_id:
+                    assessment = thesis_assessments.get(researcher_id)
+                    row["Thesis fit"] = thesis_fit_label(assessment)
         table_rows.append(row)
 
     st.subheader("Ranked candidates")
@@ -690,6 +747,8 @@ def _render_explore_tab(
             report=selected_report,
             papers_by_id=papers_by_id,
         )
+        if thesis_assessments:
+            render_thesis_fit_badges(thesis_assessments.get(researcher.id))
         render_researcher_profile_links(
             researcher,
             selected_report.signals,
@@ -712,6 +771,10 @@ def _render_explore_tab(
         )
         render_candidate_score_breakdown_expander(selected_report)
         render_signal_sources_expander(selected_report.signals)
+
+    if show_dev_tools and thesis_assessments:
+        with st.expander("Thesis fit (raw)", expanded=False):
+            render_thesis_fit_dev_panel(thesis_assessments)
 
     if show_dev_tools and view_mode == "Researchers" and run_id:
         researcher_id = researcher_id_from_report_id(selected_report.id)

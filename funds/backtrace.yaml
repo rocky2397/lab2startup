@@ -102,3 +102,48 @@ perplexity_context: |
   biotech or life-sciences commercialization unless clearly infrastructure/tooling for ML.
 
 default_paper_source: openreview
+
+thesis_fit:
+  europe_regions:
+    - Germany
+    - United Kingdom
+    - Switzerland
+    - France
+    - Netherlands
+    - Spain
+    - Italy
+    - Sweden
+    - Norway
+    - Denmark
+    - Finland
+    - Austria
+    - Belgium
+    - Ireland
+    - Poland
+    - Czech Republic
+  infra_keywords:
+    - platform engineering
+    - developer tools
+    - devtools
+    - distributed systems
+    - MLOps
+    - secure compute
+    - observability
+    - ML systems
+    - AI infrastructure
+    - infrastructure
+    - security
+  application_keywords:
+    - consulting
+    - legal tech
+    - consumer
+    - social media
+    - gaming
+  hard_exclude_keywords:
+    - drug discovery
+    - biotech
+    - genomics
+    - protein folding
+    - clinical trial
+  sonar_min_score: 60
+  sonar_max_calls: 30

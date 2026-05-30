@@ -84,6 +84,21 @@ CREATE TABLE IF NOT EXISTS run_enrichment_audits (
     created_at TEXT NOT NULL,
     FOREIGN KEY (run_id) REFERENCES pipeline_runs(id)
 );
+
+CREATE TABLE IF NOT EXISTS run_diffs (
+    run_id TEXT PRIMARY KEY,
+    prior_run_id TEXT,
+    diff_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES pipeline_runs(id)
+);
+
+CREATE TABLE IF NOT EXISTS run_thesis_fit (
+    run_id TEXT PRIMARY KEY,
+    thesis_fit_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES pipeline_runs(id)
+);
 """
 
 

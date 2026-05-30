@@ -70,6 +70,10 @@ class AppSettings:
     pipeline_cache_dir: Path
     pipeline_cache_ttl_hours: float
     force_paper_refetch: bool
+    thesis_fit_enabled: bool = True
+    diff_enabled: bool = True
+    thesis_sonar_min_score: int = 60
+    thesis_sonar_max_calls: int = 30
 
     @property
     def is_production(self) -> bool:
@@ -290,6 +294,16 @@ def get_settings() -> AppSettings:
             os.getenv("LAB2STARTUP_FORCE_PAPER_REFETCH"),
             default=False,
         ),
+        thesis_fit_enabled=_parse_bool(
+            os.getenv("LAB2STARTUP_THESIS_FIT_ENABLED"),
+            default=True,
+        ),
+        diff_enabled=_parse_bool(
+            os.getenv("LAB2STARTUP_DIFF_ENABLED"),
+            default=True,
+        ),
+        thesis_sonar_min_score=int(os.getenv("LAB2STARTUP_THESIS_SONAR_MIN_SCORE", "60")),
+        thesis_sonar_max_calls=int(os.getenv("LAB2STARTUP_THESIS_SONAR_MAX_CALLS", "30")),
     )
 
 

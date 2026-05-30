@@ -351,6 +351,50 @@ def load_latest_run_result(*, db_path: str | Path | None = None) -> ReportResult
     return load_run_result(latest.id, db_path=db_path)
 
 
+def find_prior_complete_run(
+    *,
+    conference: str,
+    year: int,
+    paper_source: str,
+    fund_profile: str | None = None,
+    exclude_run_id: str,
+    before_created_at: str,
+    db_path: str | Path | None = None,
+) -> PipelineRun | None:
+    """Return the newest complete run with papers before the current run."""
+    init_db(db_path)
+    with get_connection(db_path, readonly=True) as connection:
+        row = connection.execute(
+            """
+            SELECT * FROM pipeline_runs
+            WHERE conference = ?
+              AND year = ?
+              AND paper_source = ?
+              AND status = ?
+              AND paper_count > 0
+              AND id != ?
+              AND created_at < ?
+              AND (
+                (fund_profile IS NULL AND ? IS NULL)
+                OR fund_profile = ?
+              )
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (
+                conference,
+                year,
+                paper_source,
+                RunStatus.COMPLETE.value,
+                exclude_run_id,
+                before_created_at,
+                fund_profile,
+                fund_profile,
+            ),
+        ).fetchone()
+    return _row_to_pipeline_run(row) if row else None
+
+
 def find_latest_run_with_papers(
     *,
     conference: str,

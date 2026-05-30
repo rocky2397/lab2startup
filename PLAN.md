@@ -25,7 +25,8 @@ Mock data stays in `tests/fixtures/` for CI and docs — not used in production.
 | **13** | **Done** | Production config (`LAB2STARTUP_MODE=production`) |
 | **14** | **Done** | Dashboard reads stored runs (selector) |
 | **15** | **Done** | Backtrace fund profile (`funds/backtrace.yaml`) |
-| **16** | Planned | Run diff / watchlist vs previous month |
+| **16** | Planned | **Diff Agent** — run vs prior run (no LLM) — see [PLAN_DIFF_THESIS.md](PLAN_DIFF_THESIS.md) |
+| **17** | Planned | **Thesis Fit Agent** — Backtrace EU + infra fit (rules + gated Sonar) — see [PLAN_DIFF_THESIS.md](PLAN_DIFF_THESIS.md) |
 
 ---
 
@@ -74,16 +75,24 @@ Stages logged: ingest → enrich → signals → score → persist.
 
 Set `LAB2STARTUP_FUND=backtrace` (default).
 
-## Step 16 — Run diff (next)
+## Step 16 — Diff Agent
 
-Compare run N vs N-1: new authors, new signals, score changes.
+Compare run N vs the prior complete run for the same conference, year, and fund profile. Detect new researchers, score changes, new signals, affiliation moves, and recommendation upgrades. **No LLM** — pure snapshot diff stored in SQLite.
+
+See [PLAN_DIFF_THESIS.md](PLAN_DIFF_THESIS.md) for schema, dashboard UX, and implementation phases.
+
+## Step 17 — Thesis Fit Agent
+
+Backtrace-specific post-scoring pass: **European nexus** + **infrastructure layer** fit. Rules for all candidates; optional **Perplexity Sonar** only for high-score or `unclear` cases. Separate badge from startup likelihood score.
+
+See [PLAN_DIFF_THESIS.md](PLAN_DIFF_THESIS.md) for fund YAML extensions, cost caps, and orchestration.
 
 ---
 
 ## Architecture
 
 ```
-CLI run ──► OpenReview/OpenAlex ──► Pipeline ──► SQLite
+CLI run ──► OpenReview/OpenAlex ──► Pipeline ──► Thesis Fit ──► Diff ──► SQLite
                                               │
 Dashboard ◄───────────────────────────────────┘
 ```

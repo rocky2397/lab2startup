@@ -14,6 +14,18 @@ DEFAULT_FUND_ID = "backtrace"
 
 
 @dataclass(frozen=True)
+class ThesisFitConfig:
+    """Rule and Sonar parameters for fund thesis fit."""
+
+    europe_regions: tuple[str, ...]
+    infra_keywords: tuple[str, ...]
+    application_keywords: tuple[str, ...]
+    hard_exclude_keywords: tuple[str, ...] = ()
+    sonar_min_score: int = 60
+    sonar_max_calls: int = 30
+
+
+@dataclass(frozen=True)
 class FundConference:
     """A conference a fund monitors."""
 
@@ -35,6 +47,7 @@ class FundProfile:
     topic_scores: dict[str, int] = field(default_factory=dict)
     perplexity_context: str = ""
     default_paper_source: str = "openreview"
+    thesis_fit: ThesisFitConfig | None = None
 
     @property
     def conference_names(self) -> list[str]:
@@ -109,16 +122,31 @@ def load_fund_profile(fund_id: str, *, funds_dir: Path | None = None) -> FundPro
     if not isinstance(topic_scores, dict):
         raise ValueError(f"topic_scores must be a mapping in {path}")
 
+    exclude_keywords = tuple(str(item) for item in data.get("exclude_topic_keywords") or [])
+    thesis_fit_raw = data.get("thesis_fit")
+    thesis_fit: ThesisFitConfig | None = None
+    if isinstance(thesis_fit_raw, dict):
+        hard_exclude = thesis_fit_raw.get("hard_exclude_keywords") or list(exclude_keywords)
+        thesis_fit = ThesisFitConfig(
+            europe_regions=tuple(str(item) for item in thesis_fit_raw.get("europe_regions") or []),
+            infra_keywords=tuple(str(item) for item in thesis_fit_raw.get("infra_keywords") or []),
+            application_keywords=tuple(str(item) for item in thesis_fit_raw.get("application_keywords") or []),
+            hard_exclude_keywords=tuple(str(item) for item in hard_exclude),
+            sonar_min_score=int(thesis_fit_raw.get("sonar_min_score", 60)),
+            sonar_max_calls=int(thesis_fit_raw.get("sonar_max_calls", 30)),
+        )
+
     return FundProfile(
         id=str(data.get("id", fund_id)),
         name=str(data.get("name", fund_id)),
         description=str(data.get("description", "")).strip(),
         conferences=_parse_conferences(data.get("conferences")),
         topic_keywords=tuple(str(item) for item in data.get("topic_keywords") or []),
-        exclude_topic_keywords=tuple(str(item) for item in data.get("exclude_topic_keywords") or []),
+        exclude_topic_keywords=exclude_keywords,
         topic_scores={str(key): int(value) for key, value in topic_scores.items()},
         perplexity_context=str(data.get("perplexity_context", "")).strip(),
         default_paper_source=str(data.get("default_paper_source", "openreview")),
+        thesis_fit=thesis_fit,
     )
 
 

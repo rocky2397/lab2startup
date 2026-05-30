@@ -34,6 +34,75 @@ from app.run_store import (
 logger = logging.getLogger(__name__)
 
 
+def _run_post_pipeline_agents(
+    *,
+    run_id: str,
+    result: ReportResult,
+    conference: str,
+    year: int,
+    paper_source: str,
+    fund: FundProfile | None,
+    stored_fund_profile: str | None,
+    settings: AppSettings,
+    db_path: Path | str,
+) -> None:
+    """Run thesis fit and diff agents after snapshot persistence."""
+    if settings.thesis_fit_enabled and fund and fund.thesis_fit:
+        from app.agents.thesis_fit_agent import run_thesis_fit_agent
+        from app.thesis_fit_store import save_thesis_fit
+
+        assessments = run_thesis_fit_agent(
+            result,
+            fund=fund,
+            settings=settings,
+            perplexity_config=settings.perplexity_config,
+            sonar_min_score=settings.thesis_sonar_min_score,
+            sonar_max_calls=settings.thesis_sonar_max_calls,
+            use_sonar=bool(settings.perplexity_config.api_key),
+        )
+        if assessments:
+            save_thesis_fit(run_id, assessments, db_path=db_path)
+            logger.info("Thesis fit saved for %s (%s researchers)", run_id, len(assessments))
+
+    if settings.diff_enabled:
+        from app.agents.diff_agent import compute_run_diff
+        from app.run_diff_store import save_run_diff
+        from app.run_store import find_prior_complete_run, get_run, load_run_result
+
+        current_run = get_run(run_id, db_path=db_path)
+        prior_run = None
+        prior_result = None
+        if current_run:
+            prior_run = find_prior_complete_run(
+                conference=conference,
+                year=year,
+                paper_source=paper_source,
+                fund_profile=stored_fund_profile,
+                exclude_run_id=run_id,
+                before_created_at=current_run.created_at,
+                db_path=db_path,
+            )
+            if prior_run:
+                prior_result = load_run_result(prior_run.id, db_path=db_path)
+
+        diff = compute_run_diff(
+            result,
+            prior_result,
+            run_id=run_id,
+            prior_run_id=prior_run.id if prior_run else None,
+            conference=conference,
+            year=year,
+            fund_profile=stored_fund_profile,
+        )
+        save_run_diff(run_id, diff, db_path=db_path)
+        logger.info(
+            "Run diff saved for %s (%s deltas vs %s)",
+            run_id,
+            diff.summary.total_deltas,
+            prior_run.id if prior_run else "none",
+        )
+
+
 @dataclass(frozen=True)
 class PaperFetchResult:
     papers: list[Paper] | None
@@ -353,6 +422,17 @@ def execute_pipeline_run(
             include_clusters=include_clusters,
         )
         save_run_snapshot(run_id, result, db_path=db_path)
+        _run_post_pipeline_agents(
+            run_id=run_id,
+            result=result,
+            conference=conference,
+            year=year,
+            paper_source=paper_source,
+            fund=fund,
+            stored_fund_profile=stored_fund_profile,
+            settings=settings,
+            db_path=db_path,
+        )
         detection = result.scoring.detection
         if detection.enrichment_audit is not None:
             save_enrichment_audit(run_id, detection.enrichment_audit, db_path=db_path)

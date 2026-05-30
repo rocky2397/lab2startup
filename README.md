@@ -51,6 +51,18 @@ python run_pipeline.py --priority high --year 2024
 
 Runs are saved to SQLite (`.cache/lab2startup.db` by default).
 
+After each run, **thesis fit** (Backtrace EU + infra rules, optional Sonar) and **run diff** (vs prior complete run for the same conference) are saved automatically when enabled.
+
+```bash
+# Recompute diff or thesis fit for an existing run
+python run_diff.py --run-id run_2024_neurips_...
+python run_thesis_fit.py --run-id run_2024_neurips_... --no-sonar
+
+# Monthly batch + diff digest
+python run_monitor.py --fund backtrace --priority high --year 2024
+python run_monitor.py --digest-only --since 2026-05-01
+```
+
 ### 4. Open the dashboard
 
 ```bash
