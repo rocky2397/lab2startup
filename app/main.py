@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from app.dashboard_api import router as dashboard_router
 from app.models import Cluster, Paper, Researcher, Signal
 from app.report_generator import render_report_markdown
 from app.schemas import (
@@ -31,6 +35,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(dashboard_router)
+
+_WEBAPP_DIR = Path(__file__).resolve().parents[1] / "webapp"
+if _WEBAPP_DIR.is_dir():
+    app.mount("/app", StaticFiles(directory=str(_WEBAPP_DIR), html=True), name="webapp")
 
 
 @app.get("/", response_model=HealthResponse, tags=["meta"])

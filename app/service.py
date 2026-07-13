@@ -21,7 +21,7 @@ _active_run_id: str | None = None
 def empty_report_result() -> ReportResult:
     """Return an empty pipeline result when no stored run exists yet."""
     return ReportResult(
-        scoring=ScoringResult(detection=SignalDetectionResult()),
+        scoring=ScoringResult(detection=SignalDetectionResult(papers=[], researchers=[], clusters=[])),
         reports=[],
     )
 

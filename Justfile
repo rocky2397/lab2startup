@@ -15,6 +15,10 @@ python := `if [ -x .venv/bin/python3.12 ]; then echo .venv/bin/python3.12; elif 
 default:
     @just --list
 
+# Launch the native desktop app (FastAPI + pywebview)
+app:
+    {{python}} run_app.py
+
 # One-time setup for format/lint tooling
 install-dev:
     {{python}} -m pip install -e ".[dev]"

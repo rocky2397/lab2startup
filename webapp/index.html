@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lab2Startup</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <h1>🔬 Lab2Startup</h1>
+        <p class="muted small" id="brand-caption">Founder signal monitoring</p>
+      </div>
+
+      <div id="warnings"></div>
+
+      <section class="side-section" id="run-section">
+        <h2>Pipeline</h2>
+        <div id="fund-info"></div>
+        <label class="check-row">
+          <input type="checkbox" id="only-with-results" />
+          <span>Only show runs with results</span>
+        </label>
+        <label class="field">
+          <span>Stored run</span>
+          <select id="run-select"></select>
+        </label>
+        <div id="run-empty-hint" class="muted small hidden"></div>
+      </section>
+
+      <section class="side-section" id="new-run-section">
+        <h2>New conference run</h2>
+        <label class="field"><span>Year</span>
+          <input type="number" id="run-year" min="2000" max="2100" value="2024" />
+        </label>
+        <label class="field"><span>Run scope</span>
+          <select id="run-scope">
+            <option value="single">Single conference</option>
+            <option value="high">All high-priority</option>
+            <option value="custom">Custom selection</option>
+          </select>
+        </label>
+        <div id="run-target-wrap"></div>
+        <label class="field"><span>Paper source</span>
+          <select id="paper-source"></select>
+        </label>
+        <button id="run-pipeline-btn" class="primary">Run pipeline &amp; save</button>
+        <div id="job-progress" class="hidden"></div>
+      </section>
+
+      <section class="side-section hidden" id="dev-refresh-section">
+        <button id="refresh-btn">Refresh live data</button>
+        <p class="muted small">Development mode: refresh re-runs enabled integrations (Perplexity-first).</p>
+      </section>
+
+      <section class="side-section" id="filter-section">
+        <h2>Filters</h2>
+        <div class="field"><span>View</span>
+          <div class="segmented" id="view-mode">
+            <button data-value="researchers" class="active">Researchers</button>
+            <button data-value="clusters">Clusters</button>
+          </div>
+        </div>
+        <label class="field"><span>Minimum score <b id="min-score-value">40</b></span>
+          <input type="range" id="min-score" min="0" max="100" value="40" />
+        </label>
+        <label class="field"><span>Recommendation</span><select id="filter-recommendation"></select></label>
+        <label class="field"><span>Conference</span><select id="filter-conference"></select></label>
+        <label class="field"><span>Year</span><select id="filter-year"></select></label>
+        <label class="field"><span>Topic</span><select id="filter-topic"></select></label>
+        <div id="thesis-filters" class="hidden">
+          <label class="field"><span>Backtrace fit</span>
+            <select id="filter-thesis-fit">
+              <option>All</option><option>Strong+Moderate</option><option>Strong only</option>
+            </select>
+          </label>
+          <label class="field"><span>Europe nexus</span>
+            <select id="filter-europe">
+              <option>All</option><option>Yes</option><option>Unknown</option>
+            </select>
+          </label>
+        </div>
+        <label class="check-row">
+          <input type="checkbox" id="show-dev-tools" />
+          <span>Show developer tools</span>
+        </label>
+      </section>
+
+      <section class="side-section" id="dataset-section">
+        <h2>Dataset</h2>
+        <div id="dataset-stats" class="muted small"></div>
+        <div id="integrations" class="muted small"></div>
+      </section>
+    </aside>
+
+    <main id="main">
+      <div id="loading-overlay" class="hidden"><div class="spinner"></div><span id="loading-text">Loading…</span></div>
+      <div id="context-header"></div>
+      <nav id="tabs">
+        <button data-tab="top" class="active">Top prospects</button>
+        <button data-tab="explore">Explore &amp; details</button>
+        <button data-tab="dev" class="hidden">Diagnostics</button>
+      </nav>
+      <div id="tab-top" class="tab-panel"></div>
+      <div id="tab-explore" class="tab-panel hidden"></div>
+      <div id="tab-dev" class="tab-panel hidden"></div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
