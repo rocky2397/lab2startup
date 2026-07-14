@@ -117,7 +117,7 @@ def test_requires_action_tool_loop(agent_completed_body: dict) -> None:
             return httpx.Response(404)
         calls.append("post")
         body = json.loads(request.content.decode())
-        if body.get("previous_response_id"):
+        if isinstance(body.get("input"), list):
             return httpx.Response(200, json=agent_completed_body)
         return httpx.Response(200, json=requires_body)
 
@@ -159,6 +159,8 @@ def test_completed_status_with_pending_function_call_continues(
 ) -> None:
     """Regression: Perplexity may return status=completed with a pending function_call."""
     completed_with_call = json.loads(COMPLETED_LOOKUP_FIXTURE.read_text(encoding="utf-8"))
+    # Server-side result items must not be replayed as input on the follow-up.
+    completed_with_call["output"].insert(0, {"type": "search_results", "results": [{"url": "https://x.test"}]})
     calls: list[dict] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -166,7 +168,7 @@ def test_completed_status_with_pending_function_call_continues(
             return httpx.Response(404)
         body = json.loads(request.content.decode())
         calls.append(body)
-        if body.get("previous_response_id"):
+        if isinstance(body.get("input"), list):
             return httpx.Response(200, json=agent_completed_body)
         return httpx.Response(200, json=completed_with_call)
 
@@ -201,9 +203,12 @@ def test_completed_status_with_pending_function_call_continues(
 
     assert len(calls) == 2
     follow_up = calls[1]
-    assert follow_up.get("previous_response_id") == "resp_completed_with_function_call"
-    assert follow_up["input"][0]["type"] == "function_call_output"
-    assert follow_up["input"][0]["call_id"] == "call_lookup_1"
+    # Stateless continuation: full history resent, no previous_response_id.
+    assert "previous_response_id" not in follow_up
+    assert follow_up["input"][0]["role"] == "user"
+    tool_outputs = [item for item in follow_up["input"] if item.get("type") == "function_call_output"]
+    assert tool_outputs and tool_outputs[0]["call_id"] == "call_lookup_1"
+    assert not any(str(item.get("type", "")).endswith("_results") for item in follow_up["input"])
     assert result.status == "completed"
     assert len(result.signals) == 1
     assert result.signals[0].id.startswith("agent_")
@@ -216,9 +221,6 @@ def test_completed_with_function_call_no_follow_up_fails(agent_completed_body: d
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method != "POST":
             return httpx.Response(404)
-        body = json.loads(request.content.decode())
-        if body.get("previous_response_id"):
-            return httpx.Response(200, json=completed_with_call)
         return httpx.Response(200, json=completed_with_call)
 
     transport = httpx.MockTransport(handler)

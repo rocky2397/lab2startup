@@ -78,7 +78,19 @@ def main() -> int:
     perplexity_config = replace(settings.perplexity_config, enabled=True)
     agentic_config = None
     if args.agentic:
-        agentic_config = replace(settings.agentic_signal_config, enabled=True, db_path=Path(settings.db_path))
+        # prefilter_min_score=0: the eval measures investigation quality, so every
+        # golden-set researcher is investigated. (With fund-tuned defaults the
+        # generic-topic golden papers all score below the prefilter threshold —
+        # a real recall consideration for production runs, noted in evals/README.)
+        # early_exit=False: production stops the queue on the first high-confidence
+        # founder hit; the eval needs every researcher investigated and measured.
+        agentic_config = replace(
+            settings.agentic_signal_config,
+            enabled=True,
+            db_path=Path(settings.db_path),
+            prefilter_min_score=0.0,
+            early_exit=False,
+        )
 
     from app.agents.report_agent import run_reports
 

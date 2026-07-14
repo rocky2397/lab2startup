@@ -25,6 +25,10 @@ Every entry starts as `verified: false`. Before publishing results, a human must
 
 The report banner warns when unverified entries remain.
 
+## Prefilter note (agentic mode)
+
+The eval runs agentic mode with `prefilter_min_score=0` so every golden-set researcher is investigated. With production defaults (threshold 20), all 24 golden-set researchers would be *skipped*: their papers carry generic ML/RL topics that score low against the fund's infra-weighted topic scores, and the synthetic papers have no citations or abstracts. Worth knowing when interpreting production recall: the deterministic prefilter is a real gate, and topic weights directly trade cost against recall.
+
 ## Running
 
 ```bash

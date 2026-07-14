@@ -210,6 +210,20 @@ def _extract_function_calls(response: dict[str, Any]) -> list[dict[str, Any]]:
     return calls
 
 
+# Server-side tool result items; the Agent API rejects them as input items
+# when the conversation history is replayed for a function-calling round-trip.
+_NON_REPLAYABLE_ITEM_TYPES = {
+    "search_results",
+    "fetch_url_results",
+    "people_search_results",
+    "finance_search_results",
+}
+
+
+def _replayable_output_items(output: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in output if item.get("type") not in _NON_REPLAYABLE_ITEM_TYPES]
+
+
 def _build_request_body(
     context: dict[str, Any],
     *,
@@ -353,12 +367,20 @@ class PerplexityAgentClient:
         *,
         base_body: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute pending custom function calls and continue the agent (max 3 round-trips)."""
+        """Execute pending custom function calls and continue the agent (max 3 round-trips).
+
+        The Agent API rejects previous_response_id continuations that carry
+        function_call_output items, so the full history (user turn, prior output
+        items, tool outputs) is resent in `input` each round, per the official
+        function-calling flow.
+        """
         current = response
+        history: list[dict[str, Any]] = [{"role": "user", "content": base_body.get("input", "")}]
         for _ in range(MAX_CUSTOM_TOOL_ROUNDS):
             function_calls = _extract_function_calls(current)
             if not function_calls:
                 return current
+            history.extend(_replayable_output_items(current.get("output") or []))
 
             outputs: list[dict[str, Any]] = []
             for call in function_calls:
@@ -376,11 +398,11 @@ class PerplexityAgentClient:
                         "output": json.dumps(result),
                     }
                 )
+            history.extend(outputs)
 
             continue_body = {
                 **base_body,
-                "previous_response_id": current.get("id"),
-                "input": outputs,
+                "input": list(history),
             }
             current = self._post_agent(continue_body)
         return current

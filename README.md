@@ -16,9 +16,21 @@ For one conference, one command produces:
 - A **diff vs the previous run** of the same conference: new take-meetings, new researchers, score jumps, new signals
 - **Full audit trail**: per-researcher investigation traces with step timelines, token counts, and estimated cost, persisted in SQLite
 
-<!-- RESULTS: after the first published production run, insert the numbers table here:
-     N researchers ranked · X investigated (deep/standard/light) · Y founder signals ·
-     Z verified true positives (links) · total cost $ · cost per verified signal -->
+## Measured results
+
+Evaluated against a [golden set](evals/README.md) of 24 NeurIPS authors (2016–2023 papers) with independently verified ground truth: 14 founders (Mistral-famous down to low-publicity foundings) and 10 non-founders. The pipeline gets only what a conference exposes — name, affiliation, paper title.
+
+| Signal mode | Precision | Recall | False positives | Cost | Notes |
+|---|---|---|---|---|---|
+| One-shot Sonar | **1.000** | 0.571 | **0 / 10** | ~$0.80 (est.) | 24 queries, ~2.5 min |
+| Agentic (LangGraph + Agent API) | **1.000** | **1.000** | **0 / 10** | **$0.64 (measured)** | 24 investigations (3 deep / 7 standard / 14 light), 63 tool calls, 357k tokens, 44 min |
+
+What the numbers hide ([full per-researcher tables](evals/results/)):
+
+- **Zero false positives in both modes**, including deliberate hard negatives: researchers who *work at* AI companies without having founded them, and — the strongest case — a professor the agent caught being named "founding advisor" of a stealth startup and correctly classified as commercialization evidence, not a founding.
+- **The agentic tier earns its keep on the hard half.** One-shot Sonar found the famous founders plus two obscure ones, but missed five (its query anchors on the researcher's big-lab affiliation). Multi-step investigation recovered all five — at *lower* measured cost than the one-shot pass, because tiering spends steps only where the prefilter ranks potential.
+- **Detection, not prophecy**: the eval measures whether public founding evidence is found and correctly attributed from conference data alone. Ground truth is time-stamped (2026-07) because researchers found, return to big labs, and get acquired.
+- **The deterministic prefilter is a real recall gate**: with production fund-tuned thresholds, none of these generic-ML researchers would have been investigated at all. Topic weights trade cost against recall before any agent runs (details in [evals/README.md](evals/README.md)).
 
 ## Architecture
 
@@ -96,7 +108,7 @@ just lint          # ruff format check + lint
 
 Development mode (`LAB2STARTUP_MODE=development`, the default in tests) runs the whole pipeline against mock JSON papers and signals, so everything is testable offline.
 
-Signal quality is measured against a golden set of researchers with verified founder / non-founder ground truth — see **[evals/](evals/README.md)** for methodology; published precision/recall numbers land here once the verified run completes.
+Signal quality is measured against a golden set of researchers with verified founder / non-founder ground truth — see **[evals/](evals/README.md)** for methodology and [Measured results](#measured-results) above for the published numbers. Re-run with `python run_eval.py [--agentic]`.
 
 ```
 app/
