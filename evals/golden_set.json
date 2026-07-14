@@ -1,0 +1,344 @@
+{
+  "description": "Golden set for founder-signal detection eval. Researchers who published at NeurIPS (2015-2025) with independently verified founder / non-founder status. Verified via public sources 2026-07 (see evidence_url per entry). Non-founder means: no public founding evidence as of the as_of date; advisor/angel/employee roles do not count.",
+  "as_of": "2026-07",
+  "researchers": [
+    {
+      "name": "Aravind Srinivas",
+      "label": "founder",
+      "company": "Perplexity AI",
+      "founded_year": 2022,
+      "evidence_url": "https://grokipedia.com/page/aravind-srinivas",
+      "affiliation_at_pub": "UC Berkeley",
+      "role": "PhD Student",
+      "papers": [
+        {"title": "Reinforcement Learning with Augmented Data", "conference": "NeurIPS", "year": 2020, "topic": "reinforcement learning"}
+      ],
+      "verified": true,
+      "notes": "Co-founder & CEO of Perplexity AI (2022, with Yarats, Konwinski, Ho). RAD NeurIPS 2020 authorship confirmed."
+    },
+    {
+      "name": "Misha Laskin",
+      "label": "founder",
+      "company": "Reflection AI",
+      "founded_year": 2024,
+      "evidence_url": "https://sequoiacap.com/founder/misha-laskin/",
+      "affiliation_at_pub": "UC Berkeley",
+      "role": "Postdoctoral Researcher",
+      "papers": [
+        {"title": "Reinforcement Learning with Augmented Data", "conference": "NeurIPS", "year": 2020, "topic": "reinforcement learning"}
+      ],
+      "verified": true,
+      "notes": "Co-founder & CEO of Reflection AI (March 2024, with Ioannis Antonoglou); ex-DeepMind Gemini. Publishes under the byline 'Michael Laskin' — deliberate name-variant hard case. Shares RAD with Srinivas and Abbeel (coauthor-cluster test)."
+    },
+    {
+      "name": "Arthur Mensch",
+      "label": "founder",
+      "company": "Mistral AI",
+      "founded_year": 2023,
+      "evidence_url": "https://en.wikipedia.org/wiki/Arthur_Mensch",
+      "affiliation_at_pub": "DeepMind",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Flamingo: a Visual Language Model for Few-Shot Learning", "conference": "NeurIPS", "year": 2022, "topic": "multimodal learning"}
+      ],
+      "verified": true,
+      "notes": "Co-founder & CEO of Mistral AI (May 2023, with Lample and Lacroix). Flamingo authorship at DeepMind confirmed."
+    },
+    {
+      "name": "Guillaume Lample",
+      "label": "founder",
+      "company": "Mistral AI",
+      "founded_year": 2023,
+      "evidence_url": "https://mistral.ai",
+      "affiliation_at_pub": "Facebook AI Research",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Cross-lingual Language Model Pretraining", "conference": "NeurIPS", "year": 2019, "topic": "natural language processing"}
+      ],
+      "verified": true,
+      "notes": "Co-founder & Chief Science Officer of Mistral AI (April/May 2023). XLM (Conneau & Lample) NeurIPS 2019 confirmed."
+    },
+    {
+      "name": "Noam Shazeer",
+      "label": "founder",
+      "company": "Character.AI",
+      "founded_year": 2021,
+      "evidence_url": "https://en.wikipedia.org/wiki/Noam_Shazeer",
+      "affiliation_at_pub": "Google Brain",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Attention Is All You Need", "conference": "NeurIPS", "year": 2017, "topic": "deep learning"}
+      ],
+      "verified": true,
+      "notes": "Left Google Oct 2021 to co-found Character.AI (with Daniel De Freitas); returned to Google 2024 in a ~$2.7B deal; later moved to OpenAI. Time-sensitive-evidence hard case."
+    },
+    {
+      "name": "Aidan Gomez",
+      "label": "founder",
+      "company": "Cohere",
+      "founded_year": 2019,
+      "evidence_url": "https://en.wikipedia.org/wiki/Aidan_Gomez",
+      "affiliation_at_pub": "University of Toronto",
+      "role": "Student Researcher",
+      "papers": [
+        {"title": "Attention Is All You Need", "conference": "NeurIPS", "year": 2017, "topic": "deep learning"}
+      ],
+      "verified": true,
+      "notes": "Co-founder & CEO of Cohere (2019). Was a 20-year-old Google Brain intern on the Transformer paper; paused Oxford PhD to found Cohere."
+    },
+    {
+      "name": "David Ha",
+      "label": "founder",
+      "company": "Sakana AI",
+      "founded_year": 2023,
+      "evidence_url": "https://sakana.ai/company-info/",
+      "affiliation_at_pub": "Google Brain",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Recurrent World Models Facilitate Policy Evolution", "conference": "NeurIPS", "year": 2018, "topic": "reinforcement learning"}
+      ],
+      "verified": true,
+      "notes": "Co-founder & CEO of Sakana AI (Tokyo, 2023, with Ren Ito and Llion Jones). World Models (Ha & Schmidhuber) NeurIPS 2018 confirmed."
+    },
+    {
+      "name": "Chelsea Finn",
+      "label": "founder",
+      "company": "Physical Intelligence",
+      "founded_year": 2024,
+      "evidence_url": "https://www.crunchbase.com/person/chelsea-finn",
+      "affiliation_at_pub": "UC Berkeley",
+      "role": "PhD Student",
+      "papers": [
+        {"title": "Probabilistic Model-Agnostic Meta-Learning", "conference": "NeurIPS", "year": 2018, "topic": "meta-learning"}
+      ],
+      "verified": true,
+      "notes": "Stanford professor; co-founder & research lead of Physical Intelligence (2024). PMAML (Finn, Xu, Levine) NeurIPS 2018 confirmed."
+    },
+    {
+      "name": "Sergey Levine",
+      "label": "founder",
+      "company": "Physical Intelligence",
+      "founded_year": 2024,
+      "evidence_url": "https://www.physicalintelligence.company",
+      "affiliation_at_pub": "UC Berkeley",
+      "role": "Professor",
+      "papers": [
+        {"title": "Probabilistic Model-Agnostic Meta-Learning", "conference": "NeurIPS", "year": 2018, "topic": "meta-learning"},
+        {"title": "Value Iteration Networks", "conference": "NeurIPS", "year": 2016, "topic": "reinforcement learning"}
+      ],
+      "verified": true,
+      "notes": "UC Berkeley professor; co-founder of Physical Intelligence (2024 founding team: Hausman, Esmail, Ichter, Levine, Finn, Groom, Vuong). Both paper authorships confirmed."
+    },
+    {
+      "name": "Albert Gu",
+      "label": "founder",
+      "company": "Cartesia",
+      "founded_year": 2023,
+      "evidence_url": "https://www.cartesia.ai/company",
+      "affiliation_at_pub": "Stanford University",
+      "role": "PhD Student",
+      "papers": [
+        {"title": "HiPPO: Recurrent Memory with Optimal Polynomial Projections", "conference": "NeurIPS", "year": 2020, "topic": "sequence modeling"}
+      ],
+      "verified": true,
+      "notes": "Chief Scientist & co-founder of Cartesia (2023, with Karan Goel, Desai, Yang). HiPPO (Gu, Dao, Ermon, Rudra, Ré) NeurIPS 2020 confirmed. Mid-fame difficulty tier."
+    },
+    {
+      "name": "Yi Tay",
+      "label": "founder",
+      "company": "Reka AI",
+      "founded_year": 2023,
+      "evidence_url": "https://www.yitay.net/about",
+      "affiliation_at_pub": "Google Research",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Transformer Memory as a Differentiable Search Index", "conference": "NeurIPS", "year": 2022, "topic": "information retrieval"}
+      ],
+      "verified": true,
+      "notes": "Co-founder & Chief Scientist of Reka AI (2023); later returned to Google DeepMind. DSI NeurIPS 2022 confirmed. Time-sensitive-evidence case."
+    },
+    {
+      "name": "Pieter Abbeel",
+      "label": "founder",
+      "company": "Covariant",
+      "founded_year": 2017,
+      "evidence_url": "https://www.crunchbase.com/person/pieter-abbeel",
+      "affiliation_at_pub": "UC Berkeley",
+      "role": "Professor",
+      "papers": [
+        {"title": "Value Iteration Networks", "conference": "NeurIPS", "year": 2016, "topic": "reinforcement learning"},
+        {"title": "Reinforcement Learning with Augmented Data", "conference": "NeurIPS", "year": 2020, "topic": "reinforcement learning"}
+      ],
+      "verified": true,
+      "notes": "Co-founder, President & Chief Scientist of Covariant (2017); also co-founded Gradescope. Covariant team joined Amazon 2024 — evidence remains public. Both paper authorships confirmed."
+    },
+    {
+      "name": "Marc G. Bellemare",
+      "label": "founder",
+      "company": "Reliant AI",
+      "founded_year": null,
+      "evidence_url": "https://cifar.ca/bios/marc-g-bellemare/",
+      "affiliation_at_pub": "Google DeepMind",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Unifying Count-Based Exploration and Intrinsic Motivation", "conference": "NeurIPS", "year": 2016, "topic": "reinforcement learning"}
+      ],
+      "verified": true,
+      "notes": "Originally drafted as a negative — verification found he is co-founder & Chief Scientific Officer of Reliant AI. Low-publicity founding: a genuinely hard positive. Founding year not confirmed; fill in during next verification pass."
+    },
+    {
+      "name": "Michael I. Jordan",
+      "label": "founder",
+      "company": "Anyscale",
+      "founded_year": 2019,
+      "evidence_url": "https://www.anyscale.com/blog/founders-of-open-source-project-ray-launch-anyscale-with-20-6m-in-funding-to-democratize-distributed-programming",
+      "affiliation_at_pub": "UC Berkeley",
+      "role": "Professor",
+      "papers": [
+        {"title": "Is Q-Learning Provably Efficient?", "conference": "NeurIPS", "year": 2018, "topic": "reinforcement learning theory"}
+      ],
+      "verified": true,
+      "notes": "Originally drafted as an advisor-trap negative — Anyscale's own launch post names him in the founding group (with Nishihara, Moritz, Stoica), and Crunchbase lists him as Founder. Some press lists only the other three: a genuinely ambiguous founder case, kept as founder per primary source."
+    },
+    {
+      "name": "Aleksander Madry",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": "https://madry.mit.edu",
+      "affiliation_at_pub": "MIT",
+      "role": "Professor",
+      "papers": [
+        {"title": "Adversarial Examples Are Not Bugs, They Are Features", "conference": "NeurIPS", "year": 2019, "topic": "adversarial robustness"}
+      ],
+      "verified": true,
+      "notes": "MIT professor, later OpenAI (preparedness) — employee role. No public founding evidence found as of 2026-07. Paper authorship (Ilyas et al.) confirmed."
+    },
+    {
+      "name": "Been Kim",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": null,
+      "affiliation_at_pub": "Google Brain",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Sanity Checks for Saliency Maps", "conference": "NeurIPS", "year": 2018, "topic": "interpretability"}
+      ],
+      "verified": true,
+      "notes": "Interpretability researcher at Google DeepMind. No public founding evidence found as of 2026-07. Paper authorship (Adebayo et al.) confirmed."
+    },
+    {
+      "name": "Luke Zettlemoyer",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": "https://homes.cs.washington.edu/~lsz/",
+      "affiliation_at_pub": "University of Washington",
+      "role": "Professor",
+      "papers": [
+        {"title": "QLoRA: Efficient Finetuning of Quantized LLMs", "conference": "NeurIPS", "year": 2023, "topic": "large language models"}
+      ],
+      "verified": true,
+      "notes": "UW professor + Meta AI. No public founding evidence found as of 2026-07. QLoRA (Dettmers, Pagnoni, Holtzman, Zettlemoyer) NeurIPS 2023 oral confirmed."
+    },
+    {
+      "name": "Yejin Choi",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": "https://yejinc.github.io/",
+      "affiliation_at_pub": "University of Washington",
+      "role": "Professor",
+      "papers": [
+        {"title": "MAUVE: Measuring the Gap Between Neural Text and Human Text using Divergence Frontiers", "conference": "NeurIPS", "year": 2021, "topic": "natural language processing"}
+      ],
+      "verified": true,
+      "notes": "UW → Stanford/NVIDIA. No public founding evidence found as of 2026-07. MAUVE (Pillutla et al.) NeurIPS 2021 Outstanding Paper confirmed."
+    },
+    {
+      "name": "Chi Jin",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": "https://sites.google.com/view/cjin/home",
+      "affiliation_at_pub": "UC Berkeley",
+      "role": "PhD Student",
+      "papers": [
+        {"title": "Is Q-Learning Provably Efficient?", "conference": "NeurIPS", "year": 2018, "topic": "reinforcement learning theory"}
+      ],
+      "verified": true,
+      "notes": "Princeton associate professor, on sabbatical at OpenAI (employee). No public founding evidence found as of 2026-07. Paper (Jin, Allen-Zhu, Bubeck, Jordan) confirmed."
+    },
+    {
+      "name": "Sebastien Bubeck",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": null,
+      "affiliation_at_pub": "Microsoft Research",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Is Q-Learning Provably Efficient?", "conference": "NeurIPS", "year": 2018, "topic": "reinforcement learning theory"}
+      ],
+      "verified": true,
+      "notes": "Microsoft Research VP (Phi models) → OpenAI — employee roles throughout. No public founding evidence found as of 2026-07."
+    },
+    {
+      "name": "Oriol Vinyals",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": null,
+      "affiliation_at_pub": "Google DeepMind",
+      "role": "Research Scientist",
+      "papers": [
+        {"title": "Matching Networks for One Shot Learning", "conference": "NeurIPS", "year": 2016, "topic": "meta-learning"}
+      ],
+      "verified": true,
+      "notes": "DeepMind VP of research — employee throughout. No public founding evidence found as of 2026-07. Paper (Vinyals, Blundell, Lillicrap, Kavukcuoglu, Wierstra) confirmed."
+    },
+    {
+      "name": "Yee Whye Teh",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": "https://en.wikipedia.org/wiki/Yee_Whye_Teh",
+      "affiliation_at_pub": "University of Oxford",
+      "role": "Professor",
+      "papers": [
+        {"title": "Filtering Variational Objectives", "conference": "NeurIPS", "year": 2017, "topic": "probabilistic inference"}
+      ],
+      "verified": true,
+      "notes": "Oxford professor + DeepMind researcher. No public founding evidence found as of 2026-07. FIVO (Maddison et al., incl. Teh) NeurIPS 2017 confirmed."
+    },
+    {
+      "name": "Emma Brunskill",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": null,
+      "affiliation_at_pub": "Stanford University",
+      "role": "Professor",
+      "papers": [
+        {"title": "Provably Good Batch Off-Policy Reinforcement Learning Without Great Exploration", "conference": "NeurIPS", "year": 2020, "topic": "reinforcement learning"}
+      ],
+      "verified": true,
+      "notes": "Stanford professor (RL for education/health). No public founding evidence found as of 2026-07. Official title includes 'Off-Policy' (Liu, Swaminathan, Agarwal, Brunskill) — confirmed."
+    },
+    {
+      "name": "John Duchi",
+      "label": "non_founder",
+      "company": null,
+      "founded_year": null,
+      "evidence_url": "https://profiles.stanford.edu/john-duchi",
+      "affiliation_at_pub": "Stanford University",
+      "role": "Professor",
+      "papers": [
+        {"title": "Variance-based Regularization with Convex Objectives", "conference": "NeurIPS", "year": 2017, "topic": "optimization"}
+      ],
+      "verified": true,
+      "notes": "Stanford professor (optimization/statistics). No public founding evidence found as of 2026-07. Paper (Namkoong & Duchi, NeurIPS 2017 best paper) confirmed."
+    }
+  ]
+}

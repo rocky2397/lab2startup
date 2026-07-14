@@ -96,6 +96,8 @@ just lint          # ruff format check + lint
 
 Development mode (`LAB2STARTUP_MODE=development`, the default in tests) runs the whole pipeline against mock JSON papers and signals, so everything is testable offline.
 
+Signal quality is measured against a golden set of researchers with verified founder / non-founder ground truth — see **[evals/](evals/README.md)** for methodology; published precision/recall numbers land here once the verified run completes.
+
 ```
 app/
   agents/            # ingestion, profiling, signal, scoring, report, thesis-fit, diff agents
