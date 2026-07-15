@@ -8,6 +8,7 @@ import threading
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -420,3 +421,108 @@ def get_pipeline_job(job_id: str) -> dict[str, Any]:
 def list_pipeline_jobs() -> list[dict[str, Any]]:
     with _jobs_lock:
         return [json.loads(json.dumps(job)) for job in _jobs.values()]
+
+
+# ---------------------------------------------------------------------------
+# Golden-set eval: run from the app, browse stored results
+# ---------------------------------------------------------------------------
+
+
+class EvalRunRequest(BaseModel):
+    """Launch a golden-set eval run."""
+
+    mode: str = Field(default="sonar", pattern="^(sonar|agentic)$")
+
+
+_eval_jobs: dict[str, dict[str, Any]] = {}
+
+
+@router.get("/evals")
+def list_evals() -> dict[str, Any]:
+    """Golden-set summary, stored eval results, and any running eval job."""
+    from evals.harness import load_golden_set
+    from evals.runner import list_eval_results
+
+    settings = get_settings()
+    golden = load_golden_set()
+    with _jobs_lock:
+        running = [job for job in _eval_jobs.values() if job["status"] == "running"]
+    return {
+        "golden_set": {
+            "total": len(golden.researchers),
+            "founders": len(golden.founders()),
+            "non_founders": len(golden.non_founders()),
+            "unverified": sum(1 for entry in golden.researchers if not entry.verified),
+            "as_of": golden.as_of,
+        },
+        "api_key_set": bool(settings.perplexity_config.api_key),
+        "results": list_eval_results(),
+        "running_job": json.loads(json.dumps(running[0])) if running else None,
+    }
+
+
+@router.get("/evals/results/{name}")
+def get_eval_result(name: str) -> dict[str, Any]:
+    from evals.runner import load_eval_result
+
+    payload = load_eval_result(name)
+    if payload is None:
+        raise HTTPException(status_code=404, detail=f"Eval result not found: {name}")
+    return payload
+
+
+def _eval_job_worker(job_id: str, mode: str) -> None:
+    from evals.runner import execute_eval
+
+    try:
+        outcome = execute_eval(mode)
+        with _jobs_lock:
+            job = _eval_jobs[job_id]
+            job["status"] = "complete"
+            job["finished_at"] = _utc_now_iso()
+            job["result_name"] = Path(outcome["json_path"]).stem
+            job["strict"] = outcome["strict"]
+            job["lenient"] = outcome["lenient"]
+    except Exception as exc:
+        logger.exception("Eval job %s failed", job_id)
+        with _jobs_lock:
+            job = _eval_jobs[job_id]
+            job["status"] = "failed"
+            job["finished_at"] = _utc_now_iso()
+            job["error"] = str(exc)
+
+
+@router.post("/evals/run")
+def start_eval_run(request: EvalRunRequest) -> dict[str, Any]:
+    """Run the golden-set eval in a background thread; poll the job for progress."""
+    settings = get_settings()
+    if not settings.perplexity_config.api_key:
+        raise HTTPException(status_code=400, detail="LAB2STARTUP_PERPLEXITY_API_KEY is not set.")
+    with _jobs_lock:
+        if any(job["status"] == "running" for job in _eval_jobs.values()):
+            raise HTTPException(status_code=409, detail="An eval is already running.")
+        if any(job["status"] == "running" for job in _jobs.values()):
+            raise HTTPException(status_code=409, detail="A pipeline job is running — wait for it to finish.")
+        job_id = uuid.uuid4().hex[:12]
+        _eval_jobs[job_id] = {
+            "id": job_id,
+            "status": "running",
+            "mode": request.mode,
+            "started_at": _utc_now_iso(),
+            "finished_at": None,
+            "result_name": None,
+            "error": None,
+        }
+
+    thread = threading.Thread(target=_eval_job_worker, args=(job_id, request.mode), daemon=True)
+    thread.start()
+    return _eval_jobs[job_id]
+
+
+@router.get("/evals/jobs/{job_id}")
+def get_eval_job(job_id: str) -> dict[str, Any]:
+    job = _eval_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Eval job not found: {job_id}")
+    with _jobs_lock:
+        return json.loads(json.dumps(job))

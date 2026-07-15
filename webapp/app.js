@@ -15,6 +15,9 @@ const state = {
   topN: 10,
   jobId: null,
   jobTimer: null,
+  evalJobId: null,
+  evalTimer: null,
+  selectedEvalResult: null,
   tracesCache: {}, // runId -> {traces, summary}
   auditCache: {}, // runId -> audit payload
   filters: {
@@ -119,6 +122,8 @@ function mdToHtml(md) {
   const out = [];
   let listOpen = false;
   let tableRows = [];
+  let codeOpen = false;
+  let codeLines = [];
 
   const flushList = () => { if (listOpen) { out.push("</ul>"); listOpen = false; } };
   const flushTable = () => {
@@ -137,6 +142,18 @@ function mdToHtml(md) {
 
   for (const raw of lines) {
     const line = raw.trimEnd();
+    if (/^```/.test(line.trim())) {
+      if (codeOpen) {
+        out.push(`<pre class="json">${esc(codeLines.join("\n"))}</pre>`);
+        codeLines = [];
+      } else {
+        flushList();
+        flushTable();
+      }
+      codeOpen = !codeOpen;
+      continue;
+    }
+    if (codeOpen) { codeLines.push(raw); continue; }
     if (/^\|.*\|$/.test(line.trim())) { flushList(); tableRows.push(line.trim()); continue; }
     flushTable();
     const heading = line.match(/^(#{1,3})\s+(.*)$/);
@@ -459,7 +476,13 @@ function renderMain() {
   document.querySelectorAll("#tabs button").forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === state.tab));
   $("#tab-top").classList.toggle("hidden", state.tab !== "top");
   $("#tab-explore").classList.toggle("hidden", state.tab !== "explore");
+  $("#tab-evals").classList.toggle("hidden", state.tab !== "evals");
   $("#tab-dev").classList.toggle("hidden", state.tab !== "dev");
+
+  if (state.tab === "evals") {
+    renderEvalsTab();
+    return;
+  }
 
   const bundle = state.bundle;
   if (!bundle || (!bundle.papers.length && !bundle.reports.length)) {
@@ -1154,6 +1177,141 @@ function renderTracesPanel(container, payload) {
 }
 
 // ---------------------------------------------------------------------------
+// Evals tab
+// ---------------------------------------------------------------------------
+
+function metricCells(metrics) {
+  return `${metrics.precision ?? "—"} / ${metrics.recall ?? "—"} / ${metrics.false_positive_rate ?? "—"}`;
+}
+
+async function renderEvalsTab() {
+  const container = $("#tab-evals");
+  if (!container.dataset.loaded) {
+    container.innerHTML = '<p class="caption">Loading evals…</p>';
+  }
+  let data;
+  try {
+    data = await api("/api/evals");
+  } catch (error) {
+    container.innerHTML = `<div class="error-box">Could not load evals: ${esc(error.message)}</div>`;
+    return;
+  }
+  container.dataset.loaded = "1";
+
+  const gs = data.golden_set;
+  const job = data.running_job;
+  if (job && !state.evalTimer) {
+    state.evalJobId = job.id;
+    state.evalTimer = setInterval(pollEvalJob, 5000);
+  }
+
+  let html = `<h3 style="margin:4px 0 2px">Founder-detection eval</h3>
+    <p class="caption">Runs the golden set (${gs.total} researchers: ${gs.founders} verified founders, ${gs.non_founders} non-founders, ground truth as of ${esc(gs.as_of)}) through the unmodified production pipeline and measures precision / recall / false-positive rate. See <code>evals/README.md</code> for methodology.</p>`;
+
+  if (gs.unverified > 0) {
+    html += `<div class="warning-box">${gs.unverified} golden-set entries are not verified — results will be marked preliminary.</div>`;
+  }
+  if (!data.api_key_set) {
+    html += '<div class="error-box">LAB2STARTUP_PERPLEXITY_API_KEY is not set — eval runs need it.</div>';
+  }
+
+  html += '<div class="card"><h3>Run an eval</h3>';
+  if (job) {
+    const started = job.started_at ? new Date(job.started_at) : null;
+    const elapsed = started ? Math.round((Date.now() - started.getTime()) / 60000) : "?";
+    html += `<div class="job-item"><span class="job-dot running"></span>
+      <span><b>${esc(job.mode)}</b> eval running — started ${elapsed} min ago${job.mode === "agentic" ? " (agentic runs take ~45 min)" : ""}</span></div>`;
+  } else {
+    html += `<p class="caption"><b>Sonar</b>: one web-search query per researcher — ~2 min, under $1.
+      &nbsp;·&nbsp; <b>Agentic</b>: tiered multi-step investigations (3 deep / 7 standard / rest light) — ~45 min, $1–3, cost measured in traces.</p>
+      <div class="link-buttons">
+        <button id="run-eval-sonar" ${data.api_key_set ? "" : "disabled"}>Run Sonar eval</button>
+        <button id="run-eval-agentic" ${data.api_key_set ? "" : "disabled"}>Run agentic eval</button>
+      </div>`;
+  }
+  html += '<div id="eval-job-note"></div></div>';
+
+  html += '<div class="card"><h3>Stored results</h3>';
+  if (!data.results.length) {
+    html += '<p class="caption">No eval results yet.</p>';
+  } else {
+    html += '<div id="eval-results-table"></div>';
+  }
+  html += "</div>";
+  html += '<div id="eval-result-detail"></div>';
+  container.innerHTML = html;
+
+  const sonarBtn = $("#run-eval-sonar");
+  if (sonarBtn) sonarBtn.addEventListener("click", () => startEvalRun("sonar"));
+  const agenticBtn = $("#run-eval-agentic");
+  if (agenticBtn) agenticBtn.addEventListener("click", () => startEvalRun("agentic"));
+
+  if (data.results.length) {
+    const rowIds = data.results.map((result) => result.name);
+    if (!rowIds.includes(state.selectedEvalResult)) state.selectedEvalResult = rowIds[0];
+    makeTable($("#eval-results-table"),
+      ["Run", "Mode", "Duration", "Strict P/R/FPR", "Lenient P/R/FPR"],
+      data.results.map((result) => ({
+        Run: esc((result.meta.started_at || result.name).slice(0, 16).replace("T", " ")),
+        Mode: `<span class="badge blue">${esc(result.meta.mode || "?")}</span>`,
+        Duration: result.meta.duration_seconds ? `${Math.round(result.meta.duration_seconds / 60)} min` : "—",
+        "Strict P/R/FPR": metricCells(result.strict),
+        "Lenient P/R/FPR": metricCells(result.lenient),
+      })), {
+        rowIds,
+        selectedId: state.selectedEvalResult,
+        onSelect: (name) => { state.selectedEvalResult = name; renderEvalsTab(); },
+      });
+    renderEvalResultDetail(state.selectedEvalResult);
+  }
+}
+
+async function renderEvalResultDetail(name) {
+  const holder = $("#eval-result-detail");
+  if (!holder || !name) return;
+  try {
+    const result = await api(`/api/evals/results/${encodeURIComponent(name)}`);
+    holder.innerHTML = `<div class="card"><h3>${esc(name)}</h3><div class="markdown">${mdToHtml(result.markdown || "")}</div></div>`;
+  } catch (error) {
+    holder.innerHTML = `<div class="error-box">${esc(error.message)}</div>`;
+  }
+}
+
+async function startEvalRun(mode) {
+  try {
+    const job = await api("/api/evals/run", { method: "POST", body: JSON.stringify({ mode }) });
+    state.evalJobId = job.id;
+    if (!state.evalTimer) state.evalTimer = setInterval(pollEvalJob, 5000);
+    renderEvalsTab();
+  } catch (error) {
+    const note = $("#eval-job-note");
+    if (note) note.innerHTML = `<div class="error-box">${esc(error.message)}</div>`;
+  }
+}
+
+async function pollEvalJob() {
+  if (!state.evalJobId) {
+    clearInterval(state.evalTimer);
+    state.evalTimer = null;
+    return;
+  }
+  try {
+    const job = await api(`/api/evals/jobs/${state.evalJobId}`);
+    if (job.status !== "running") {
+      clearInterval(state.evalTimer);
+      state.evalTimer = null;
+      state.evalJobId = null;
+      if (job.result_name) state.selectedEvalResult = job.result_name;
+      if (state.tab === "evals") renderEvalsTab();
+    }
+  } catch {
+    clearInterval(state.evalTimer);
+    state.evalTimer = null;
+    state.evalJobId = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Pipeline jobs
 // ---------------------------------------------------------------------------
 
@@ -1344,7 +1502,7 @@ async function init() {
     const runs = displayRuns();
     state.selectedRunId = pickPreferredRunId(runs);
     const hash = location.hash.replace("#", "");
-    if (["top", "explore", "dev"].includes(hash)) {
+    if (["top", "explore", "evals", "dev"].includes(hash)) {
       state.tab = hash;
       if (hash === "dev") {
         state.filters.showDevTools = true;

@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from dataclasses import replace
-from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -18,15 +15,8 @@ reexec_with_project_venv(ROOT)
 
 from app.agents.ingestion_agent import extract_researchers
 from app.config import get_settings
-from evals.harness import (
-    build_papers,
-    classify_predictions,
-    compute_metrics,
-    load_golden_set,
-    render_markdown_report,
-)
-
-RESULTS_DIR = ROOT / "evals" / "results"
+from evals.harness import build_papers, load_golden_set
+from evals.runner import RESULTS_DIR, execute_eval
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,60 +65,12 @@ def main() -> int:
             print("Aborted.")
             return 1
 
-    perplexity_config = replace(settings.perplexity_config, enabled=True)
-    agentic_config = None
-    if args.agentic:
-        # prefilter_min_score=0: the eval measures investigation quality, so every
-        # golden-set researcher is investigated. (With fund-tuned defaults the
-        # generic-topic golden papers all score below the prefilter threshold —
-        # a real recall consideration for production runs, noted in evals/README.)
-        # early_exit=False: production stops the queue on the first high-confidence
-        # founder hit; the eval needs every researcher investigated and measured.
-        agentic_config = replace(
-            settings.agentic_signal_config,
-            enabled=True,
-            db_path=Path(settings.db_path),
-            prefilter_min_score=0.0,
-            early_exit=False,
-        )
-
-    from app.agents.report_agent import run_reports
-
-    started = datetime.now(UTC)
-    result = run_reports(
-        papers=papers,
-        perplexity_config=perplexity_config,
-        agentic_signal_config=agentic_config,
-        use_mock_signals=False,
-        topic_scores=settings.topic_scores,
-        conference="NeurIPS",
-        year=max(paper.year for paper in papers),
-        run_id=f"eval_{started.strftime('%Y%m%dT%H%M%S')}",
-    )
-
-    rows = classify_predictions(result, golden)
-    strict = compute_metrics(rows, lenient=False)
-    lenient = compute_metrics(rows, lenient=True)
-    run_meta = {
-        "mode": mode,
-        "model": settings.perplexity_config.model,
-        "started_at": started.isoformat(),
-        "duration_seconds": round((datetime.now(UTC) - started).total_seconds(), 1),
-    }
-    report_md = render_markdown_report(golden, rows, mode=mode, run_meta=run_meta)
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    stamp = started.strftime("%Y%m%d_%H%M%S")
-    md_path = output_dir / f"eval_{mode}_{stamp}.md"
-    md_path.write_text(report_md, encoding="utf-8")
-    json_path = output_dir / f"eval_{mode}_{stamp}.json"
-    payload = {"meta": run_meta, "strict": strict, "lenient": lenient, "rows": [vars(row) for row in rows]}
-    json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
+    outcome = execute_eval(mode, golden_path=args.golden, output_dir=args.output_dir)
+    strict = outcome["strict"]
+    lenient = outcome["lenient"]
     print(f"\nStrict:  precision={strict['precision']} recall={strict['recall']} fpr={strict['false_positive_rate']}")
     print(f"Lenient: precision={lenient['precision']} recall={lenient['recall']} fpr={lenient['false_positive_rate']}")
-    print(f"\nReport: {md_path}")
+    print(f"\nReport: {outcome['md_path']}")
     return 0
 
 
