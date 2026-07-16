@@ -7,7 +7,7 @@ All settings are environment variables (loaded from `.env` — copy `.env.exampl
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `LAB2STARTUP_MODE` | `development` | `production` loads stored SQLite runs and disables mock signals |
-| `LAB2STARTUP_FUND` | `backtrace` | Fund profile in `funds/` — scopes conferences, scoring, Perplexity context |
+| `LAB2STARTUP_FUND` | `default` | Fund profile in `funds/` — scopes conferences, scoring, Perplexity context |
 | `LAB2STARTUP_DB_PATH` | `.cache/lab2startup.db` | SQLite database for stored runs, traces, audits |
 | `LAB2STARTUP_PAPER_SOURCE` | `openreview` (prod) / `json` (dev) | `openreview`, `openalex`, or `json` |
 | `LAB2STARTUP_PAPERS_PATH` | `app/data/sample_papers.json` | Paper JSON when source is `json` |

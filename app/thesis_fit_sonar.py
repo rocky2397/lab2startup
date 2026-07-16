@@ -110,7 +110,7 @@ def build_thesis_fit_prompt(
         f"Existing signals (do not duplicate founder investigation):\n{signal_block}\n\n"
         "Return JSON with:\n"
         "- infra_layer: infra | application | mixed | unclear (platform/devtools/ML infra vs apps)\n"
-        "- europe_nexus: yes | no | unclear (European operational nexus for Backtrace)\n"
+        "- europe_nexus: yes | no | unclear (European operational nexus for the fund)\n"
         "- fit_level: strong | moderate | weak | unclear\n"
         "- reasons: 2-4 short audit bullets\n"
         "- identity_explanation: one sentence confirming this is the correct person\n"

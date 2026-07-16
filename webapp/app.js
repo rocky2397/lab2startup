@@ -885,7 +885,7 @@ function renderCandidateDetail(container, report) {
       html += `<p class="caption">Research topics: ${esc(ctx.topics.slice(0, 4).join(", "))}${ctx.topics.length > 4 ? "…" : ""}</p>`;
     }
     if (assessment) {
-      html += `<p><b>Backtrace fit:</b> <span class="badge ${FIT_COLORS[assessment.fit_level] || "gray"}">${esc(titleCase(assessment.fit_level))}</span>
+      html += `<p><b>Thesis fit:</b> <span class="badge ${FIT_COLORS[assessment.fit_level] || "gray"}">${esc(titleCase(assessment.fit_level))}</span>
         · <b>EU:</b> ${esc(titleCase(assessment.europe_nexus))} · <b>Layer:</b> ${esc(titleCase(assessment.infra_layer))}</p>`;
       if (assessment.reasons && assessment.reasons.length) {
         html += `<p class="caption">${esc(assessment.reasons.slice(0, 3).join(" · "))}</p>`;

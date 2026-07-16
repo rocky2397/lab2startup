@@ -12,6 +12,7 @@ Measures the core quality metric of the product: **given only what a conference 
 ## What this does and doesn't measure
 
 - It measures **detection of public evidence**, not prophecy: the pipeline searches the live web, so it can only find foundings that left a public trace. That matches the product claim ("surface founder signals early"), not "predict foundings before any signal exists."
+- **Temporal leakage is inherent and acknowledged, not hidden.** Golden-set papers date back to 2016, and the agent investigating their authors sees the 2026 web — including companies founded years after the paper. That is fine for a detection eval, but it means these numbers cannot be read as a backtest of *prediction* ("could the system have foreseen this founding from the paper alone?"). A true backtest is not achievable with this architecture: even date-restricted search can't remove the outcome from the LLM's training data, and a hindsight-selected golden set encodes the future in its sampling. The only clean predictive test is a forward test — score a current cohort, freeze, grade in 2–3 years.
 - Famous founders (Mistral tier) are near-trivial for a web-search agent; the informative cases are the seed-stage founders and the hard negatives. Read the per-researcher table, not just the headline number.
 - Ground truth is time-sensitive (people found companies, return to big labs, companies get acquired). `as_of` in the golden set records when labels were checked.
 

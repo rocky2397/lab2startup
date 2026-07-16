@@ -33,7 +33,7 @@ SCORE_COMPONENTS: list[tuple[str, str, int, str]] = [
         "applied_relevance",
         20,
         "Highest topic score across the candidate's papers. Default topics: AI agents 18, "
-        "robotics 17, biotech AI 19; unknown topics = 10. Fund profiles (e.g. Backtrace) can "
+        "robotics 17, biotech AI 19; unknown topics = 10. Fund profiles can "
         "override via `topic_scores` in the fund YAML.",
     ),
     (

@@ -1,4 +1,4 @@
-"""Tests for fund profiles (Step 15 — Backtrace)."""
+"""Tests for fund profiles (Step 15)."""
 
 from __future__ import annotations
 
@@ -17,61 +17,61 @@ from app.models import Paper, PaperAuthor
 
 
 @pytest.fixture
-def backtrace():
+def fund():
     return load_fund_profile(DEFAULT_FUND_ID)
 
 
-def test_load_backtrace_profile(backtrace) -> None:
-    assert backtrace.id == "backtrace"
-    assert "Backtrace" in backtrace.name
-    assert "NeurIPS" in backtrace.conference_names
-    assert "ICML" in backtrace.conference_names
-    assert "ICLR" in backtrace.conference_names
-    assert "OSDI" in backtrace.conference_names
-    assert "CCS" in backtrace.conference_names
-    assert len(backtrace.conference_names) >= 14
-    assert backtrace.topic_scores["biotech AI"] == 4
+def test_load_default_profile(fund) -> None:
+    assert fund.id == "default"
+    assert fund.name
+    assert "NeurIPS" in fund.conference_names
+    assert "ICML" in fund.conference_names
+    assert "ICLR" in fund.conference_names
+    assert "OSDI" in fund.conference_names
+    assert "CCS" in fund.conference_names
+    assert len(fund.conference_names) >= 14
+    assert fund.topic_scores["biotech AI"] == 4
 
 
-def test_high_priority_conferences(backtrace) -> None:
-    high = backtrace.high_priority_conferences
+def test_high_priority_conferences(fund) -> None:
+    high = fund.high_priority_conferences
     assert "NeurIPS" in high
     assert "MLSys" in high
     assert "USENIX Security" in high
     assert "ICSE" not in high
 
 
-def test_resolve_conference_list(backtrace) -> None:
+def test_resolve_conference_list(fund) -> None:
     selected = resolve_conference_list(
-        backtrace,
+        fund,
         conferences=["NeurIPS", "MLSys"],
     )
     assert selected == ["NeurIPS", "MLSys"]
 
-    by_priority = resolve_conference_list(backtrace, priority="high")
+    by_priority = resolve_conference_list(fund, priority="high")
     assert "NeurIPS" in by_priority
     assert "ICSE" not in by_priority
 
 
-def test_conference_label_includes_source(backtrace) -> None:
-    label = backtrace.conference_label("MLSys")
+def test_conference_label_includes_source(fund) -> None:
+    label = fund.conference_label("MLSys")
     assert "openalex" in label
     assert "MLSys" in label
 
 
-def test_validate_conference_for_fund(backtrace) -> None:
-    entry = validate_conference_for_fund("NeurIPS", backtrace)
+def test_validate_conference_for_fund(fund) -> None:
+    entry = validate_conference_for_fund("NeurIPS", fund)
     assert entry.name == "NeurIPS"
 
     with pytest.raises(ValueError, match="not in scope"):
-        validate_conference_for_fund("CVPR", backtrace)
+        validate_conference_for_fund("CVPR", fund)
 
 
-def test_resolve_paper_source_for_fund(backtrace) -> None:
+def test_resolve_paper_source_for_fund(fund) -> None:
     assert (
         resolve_paper_source_for_fund(
             conference="NeurIPS",
-            fund=backtrace,
+            fund=fund,
             requested_source=None,
         )
         == "openreview"
@@ -79,7 +79,7 @@ def test_resolve_paper_source_for_fund(backtrace) -> None:
     assert (
         resolve_paper_source_for_fund(
             conference="MLSys",
-            fund=backtrace,
+            fund=fund,
             requested_source=None,
         )
         == "openalex"
@@ -88,12 +88,12 @@ def test_resolve_paper_source_for_fund(backtrace) -> None:
     with pytest.raises(ValueError, match="not supported"):
         resolve_paper_source_for_fund(
             conference="MLSys",
-            fund=backtrace,
+            fund=fund,
             requested_source="openreview",
         )
 
 
-def test_paper_matches_fund_excludes_biotech(backtrace) -> None:
+def test_paper_matches_fund_excludes_biotech(fund) -> None:
     biotech_paper = Paper(
         id="paper_bio",
         title="Drug discovery with deep learning",
@@ -112,6 +112,6 @@ def test_paper_matches_fund_excludes_biotech(backtrace) -> None:
         abstract="platform engineering infrastructure",
         authors=[PaperAuthor(name="B", affiliation="Y", role="Researcher")],
     )
-    assert paper_matches_fund(biotech_paper, backtrace) is False
-    assert paper_matches_fund(infra_paper, backtrace) is True
-    assert len(filter_papers_for_fund([biotech_paper, infra_paper], backtrace)) == 1
+    assert paper_matches_fund(biotech_paper, fund) is False
+    assert paper_matches_fund(infra_paper, fund) is True
+    assert len(filter_papers_for_fund([biotech_paper, infra_paper], fund)) == 1

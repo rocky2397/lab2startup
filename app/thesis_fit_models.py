@@ -13,7 +13,7 @@ ThesisFitSource = Literal["rules", "sonar", "rules+sonar"]
 
 
 class ThesisFitLevel(StrEnum):
-    """Backtrace-specific thesis alignment band."""
+    """Fund thesis alignment band."""
 
     STRONG = "strong"
     MODERATE = "moderate"

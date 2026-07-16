@@ -29,8 +29,16 @@ What the numbers hide ([full per-researcher tables](evals/results/)):
 
 - **Zero false positives in both modes**, including deliberate hard negatives: researchers who *work at* AI companies without having founded them, and — the strongest case — a professor the agent caught being named "founding advisor" of a stealth startup and correctly classified as commercialization evidence, not a founding.
 - **The agentic tier earns its keep on the hard half.** One-shot Sonar found the famous founders plus two obscure ones, but missed five (its query anchors on the researcher's big-lab affiliation). Multi-step investigation recovered all five — at *lower* measured cost than the one-shot pass, because tiering spends steps only where the prefilter ranks potential.
-- **Detection, not prophecy**: the eval measures whether public founding evidence is found and correctly attributed from conference data alone. Ground truth is time-stamped (2026-07) because researchers found, return to big labs, and get acquired.
 - **The deterministic prefilter is a real recall gate**: with production fund-tuned thresholds, none of these generic-ML researchers would have been investigated at all. Topic weights trade cost against recall before any agent runs (details in [evals/README.md](evals/README.md)).
+
+### What these numbers do — and don't — measure
+
+Be careful reading the table: this eval measures **detection, not prediction**.
+
+- The eval runs **today, against the live web**. When the system investigates the author of a 2019 paper, its web search sees everything published since — including the company that author founded in 2023. Conference metadata is only the *seed*; the evidence comes from the present-day internet. The numbers above therefore answer: *given nothing but a name, an affiliation, and paper titles, does the system find that person's current founder status on the public web and attribute it to the right human, with zero false positives?*
+- They do **not** answer: *could the system have predicted, in 2019, who would found a company by 2023?* No honest backtest of that is possible with this architecture. Even with date-restricted search, the underlying LLM's training data already contains the outcomes (the model "knows" who founded Mistral, no filter can make it un-know), and a golden set assembled in hindsight encodes the future in its own sample selection.
+- **Why detection is the right thing to measure for production**: the product runs on the *newest* conferences, where the interesting researchers haven't announced anything yet — there is no future web to leak from, and finding faint, current, public signals is exactly the job. The eval validates that machinery: disambiguation, evidence retrieval, and classification discipline (e.g. correctly labeling a "founding advisor" as *not* a founder).
+- The only clean test of predictive power is a **forward test**: score a current cohort now, freeze the predictions, and grade them in two to three years. Ground truth here is time-stamped (2026-07) because founder status itself moves — researchers found, return to big labs, and get acquired.
 
 ## Architecture
 
@@ -92,7 +100,7 @@ The desktop app opens in a native window: pick a stored run, filter by score/rec
 Recurring monitoring:
 
 ```bash
-python run_monitor.py --fund backtrace --priority high --year 2024   # monthly batch
+python run_monitor.py --priority high --year 2024                    # monthly batch
 python run_monitor.py --digest-only --since 2026-06-01               # diff digest
 ```
 
@@ -117,10 +125,10 @@ app/
   dashboard_api.py   # /api backing the desktop app
   main.py            # FastAPI entrypoint (serves API + webapp/)
   run_service.py     # pipeline execution + SQLite persistence
-funds/backtrace.yaml # fund profile: conference scope, topic scores, thesis rules
+funds/default.yaml   # fund profile: conference scope, topic scores, thesis rules
 webapp/              # desktop app frontend (vanilla JS, no build step)
 run_app.py           # native desktop launcher (uvicorn + pywebview)
 run_pipeline.py      # CLI pipeline runner
 ```
 
-Fund scope is a YAML profile (`funds/backtrace.yaml` by default): which conferences to monitor at which priority, topic scoring overrides, thesis-fit rules, and the Perplexity context string. Adding a fund = adding a YAML file.
+Fund scope is a YAML profile (`funds/default.yaml` ships as a generic deep-tech infrastructure example): which conferences to monitor at which priority, topic scoring overrides, thesis-fit rules, and the Perplexity context string. To adapt the product to your fund, copy the YAML, edit the thesis, and point `LAB2STARTUP_FUND` at it — no code changes.

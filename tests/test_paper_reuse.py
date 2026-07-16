@@ -25,7 +25,7 @@ def _seed_complete_run(
     conference: str = "NeurIPS",
     year: int = 2024,
     paper_source: str = "openreview",
-    fund_profile: str | None = "backtrace",
+    fund_profile: str | None = "default",
 ) -> list:
     result = run_reports(include_clusters=False)
     papers = result.scoring.detection.papers
@@ -44,18 +44,18 @@ def _seed_complete_run(
 
 def test_find_latest_run_with_papers_matches_fund_profile(tmp_path: Path) -> None:
     db_path = tmp_path / "reuse.db"
-    _seed_complete_run(db_path=db_path, run_id="run_backtrace", fund_profile="backtrace")
+    _seed_complete_run(db_path=db_path, run_id="run_default", fund_profile="default")
     _seed_complete_run(db_path=db_path, run_id="run_other", fund_profile="other_fund")
 
     match = find_latest_run_with_papers(
         conference="NeurIPS",
         year=2024,
         paper_source="openreview",
-        fund_profile="backtrace",
+        fund_profile="default",
         db_path=db_path,
     )
     assert match is not None
-    assert match.id == "run_backtrace"
+    assert match.id == "run_default"
 
     no_match = find_latest_run_with_papers(
         conference="NeurIPS",
@@ -82,7 +82,7 @@ def test_fetch_papers_reuses_openreview_without_api_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db_path = tmp_path / "reuse.db"
-    stored = _seed_complete_run(db_path=db_path, run_id="run_cached", fund_profile="backtrace")
+    stored = _seed_complete_run(db_path=db_path, run_id="run_cached", fund_profile="default")
 
     fetch_mock = MagicMock(return_value=[])
     monkeypatch.setattr(
@@ -102,7 +102,7 @@ def test_fetch_papers_reuses_openreview_without_api_call(
         fund=None,
         db_path=db_path,
         force_refetch=False,
-        fund_profile="backtrace",
+        fund_profile="default",
     )
 
     assert paper_fetch.papers is not None
@@ -116,7 +116,7 @@ def test_fetch_papers_force_refetch_bypasses_reuse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db_path = tmp_path / "reuse.db"
-    _seed_complete_run(db_path=db_path, run_id="run_cached", fund_profile="backtrace")
+    _seed_complete_run(db_path=db_path, run_id="run_cached", fund_profile="default")
 
     fetched = run_reports(include_clusters=False).scoring.detection.papers
     fetch_mock = MagicMock(return_value=fetched)
@@ -137,7 +137,7 @@ def test_fetch_papers_force_refetch_bypasses_reuse(
         fund=None,
         db_path=db_path,
         force_refetch=True,
-        fund_profile="backtrace",
+        fund_profile="default",
     )
 
     assert paper_fetch.papers is not None

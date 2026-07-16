@@ -17,15 +17,15 @@ from app.thesis_fit_store import deserialize_thesis_fit, serialize_thesis_fit
 
 
 @pytest.fixture
-def backtrace():
+def fund():
     return load_fund_profile(DEFAULT_FUND_ID)
 
 
-def test_rules_only_when_sonar_disabled(backtrace) -> None:
+def test_rules_only_when_sonar_disabled(fund) -> None:
     result = run_reports(include_clusters=False)
     assessments = run_thesis_fit_agent(
         result,
-        fund=backtrace,
+        fund=fund,
         use_sonar=False,
     )
     assert assessments
@@ -34,7 +34,7 @@ def test_rules_only_when_sonar_disabled(backtrace) -> None:
 
 
 @patch("app.agents.thesis_fit_agent.query_thesis_fit_sonar")
-def test_sonar_merged_for_gated_candidates(mock_sonar, backtrace) -> None:
+def test_sonar_merged_for_gated_candidates(mock_sonar, fund) -> None:
     result = run_reports(include_clusters=False)
     detection = result.scoring.detection
     target_report = next(r for r in result.reports if r.id.startswith("report_researcher_"))
@@ -43,7 +43,7 @@ def test_sonar_merged_for_gated_candidates(mock_sonar, backtrace) -> None:
 
     mock_sonar.return_value = ThesisFitAssessment(
         researcher_id=researcher.id,
-        fund_id=backtrace.id,
+        fund_id=fund.id,
         infra_layer="infra",
         europe_nexus="yes",
         fit_level=ThesisFitLevel.STRONG,
@@ -66,7 +66,7 @@ def test_sonar_merged_for_gated_candidates(mock_sonar, backtrace) -> None:
     config = PerplexityConfig(enabled=True, api_key="test-key")
     assessments = run_thesis_fit_agent(
         result,
-        fund=backtrace,
+        fund=fund,
         perplexity_config=config,
         sonar_min_score=60,
         sonar_max_calls=5,
@@ -81,14 +81,14 @@ def test_sonar_merged_for_gated_candidates(mock_sonar, backtrace) -> None:
 
 
 @patch("app.agents.thesis_fit_agent.query_thesis_fit_sonar")
-def test_sonar_identity_rejection_keeps_rules(mock_sonar, backtrace) -> None:
+def test_sonar_identity_rejection_keeps_rules(mock_sonar, fund) -> None:
     result = run_reports(include_clusters=False)
     mock_sonar.return_value = None
 
     config = PerplexityConfig(enabled=True, api_key="test-key")
     assessments = run_thesis_fit_agent(
         result,
-        fund=backtrace,
+        fund=fund,
         perplexity_config=config,
         sonar_max_calls=10,
         use_sonar=True,
@@ -97,9 +97,9 @@ def test_sonar_identity_rejection_keeps_rules(mock_sonar, backtrace) -> None:
     assert all(a.source == "rules" for a in assessments.values())
 
 
-def test_thesis_fit_store_roundtrip(backtrace) -> None:
+def test_thesis_fit_store_roundtrip(fund) -> None:
     result = run_reports(include_clusters=False)
-    assessments = run_thesis_fit_agent(result, fund=backtrace, use_sonar=False)
+    assessments = run_thesis_fit_agent(result, fund=fund, use_sonar=False)
     payload = serialize_thesis_fit(assessments)
     restored = deserialize_thesis_fit(payload)
     assert len(restored) == len(assessments)

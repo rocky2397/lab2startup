@@ -1,11 +1,12 @@
-id: backtrace
-name: Backtrace Capital
+id: default
+name: Deep-Tech Infrastructure Fund
 description: >
-  Munich-based pre-seed/seed VC (Fund I, ~€50m) focused on deep-tech infrastructure —
-  platform engineering, secure compute, developer tooling, AI/ML infrastructure, and
-  security — not biotech or consumer apps.
+  Example fund profile: a European pre-seed/seed VC focused on deep-tech
+  infrastructure — platform engineering, secure compute, developer tooling,
+  AI/ML infrastructure, and security — not biotech or consumer apps.
+  Copy this file to create your own fund profile.
 
-# Conferences Backtrace monitors before each submission cycle.
+# Conferences the fund monitors before each submission cycle.
 # sources: openreview (ML venues) | openalex (systems/security/devtools)
 conferences:
   # --- ML & AI infrastructure (high) ---
@@ -95,7 +96,7 @@ topic_scores:
   biotech AI: 4
 
 perplexity_context: |
-  You are sourcing for Backtrace Capital, a Munich pre-seed/seed VC investing in deep-tech
+  You are sourcing for a European pre-seed/seed VC investing in deep-tech
   infrastructure: platform engineering, developer tooling, AI/ML infrastructure, secure
   compute, and security — NOT biotech drug discovery or consumer social apps.
   Prioritize evidence of startups/products in those areas. Deprioritize pure academic

@@ -395,7 +395,7 @@ def main() -> None:
         europe_filter = "All"
         if fund and fund.thesis_fit:
             thesis_fit_filter = st.selectbox(
-                "Backtrace fit",
+                "Thesis fit",
                 thesis_fit_filter_options(),
                 key="thesis_fit_filter",
             )

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI entry point for monthly Backtrace-scoped conference sourcing runs (Step 12/15)."""
+"""CLI entry point for monthly fund-scoped conference sourcing runs (Step 12/15)."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default_conference = settings.fund_profile.conferences[0].name
 
     parser = argparse.ArgumentParser(
-        description=("Run the Lab2Startup pipeline for a Backtrace-relevant conference and store results in SQLite."),
+        description=("Run the Lab2Startup pipeline for an in-scope conference and store results in SQLite."),
     )
     parser.add_argument(
         "--conferences",

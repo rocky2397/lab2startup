@@ -28,7 +28,7 @@ def render_thesis_fit_badges(assessment: ThesisFitAssessment | None) -> None:
     europe = assessment.europe_nexus.title()
     layer = assessment.infra_layer.title()
     st.markdown(
-        f"**Backtrace fit:** :{_FIT_COLORS.get(assessment.fit_level, 'gray')}[{fit}] · "
+        f"**Thesis fit:** :{_FIT_COLORS.get(assessment.fit_level, 'gray')}[{fit}] · "
         f"**EU:** {europe} · **Layer:** {layer}"
     )
     if assessment.reasons:

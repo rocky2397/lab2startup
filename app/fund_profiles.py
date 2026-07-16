@@ -1,4 +1,4 @@
-"""Fund profile loading and Backtrace-scoped conference logic (Step 15)."""
+"""Fund profile loading and fund-scoped conference logic (Step 15)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import yaml
 from app.models import Paper
 
 FUNDS_DIR = Path(__file__).resolve().parents[1] / "funds"
-DEFAULT_FUND_ID = "backtrace"
+DEFAULT_FUND_ID = "default"
 
 
 @dataclass(frozen=True)
@@ -159,7 +159,7 @@ def list_fund_profiles(*, funds_dir: Path | None = None) -> list[str]:
 
 
 def load_default_fund_profile() -> FundProfile:
-    """Load the default Backtrace fund profile."""
+    """Load the default fund profile."""
     return load_fund_profile(DEFAULT_FUND_ID)
 
 

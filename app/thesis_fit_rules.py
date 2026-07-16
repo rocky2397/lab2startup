@@ -1,4 +1,4 @@
-"""Deterministic Backtrace thesis fit rules (Step 17)."""
+"""Deterministic fund thesis fit rules (Step 17)."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def _combine_fit_level(
 ) -> tuple[ThesisFitLevel, list[str]]:
     reasons = list(europe_reasons) + list(infra_reasons)
     if hard_excluded:
-        return ThesisFitLevel.WEAK, reasons + ["Outside Backtrace thesis (excluded domain)"]
+        return ThesisFitLevel.WEAK, reasons + ["Outside fund thesis (excluded domain)"]
 
     if europe == "yes" and infra == "infra":
         return ThesisFitLevel.STRONG, reasons

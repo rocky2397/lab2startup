@@ -23,7 +23,7 @@ from app.thesis_fit_rules import assess_thesis_fit
 
 
 @pytest.fixture
-def backtrace():
+def fund():
     return load_fund_profile(DEFAULT_FUND_ID)
 
 
@@ -52,7 +52,7 @@ def _report(researcher_id: str, name: str, score: int = 50) -> Report:
     )
 
 
-def test_munich_ml_systems_strong_or_moderate(backtrace) -> None:
+def test_munich_ml_systems_strong_or_moderate(fund) -> None:
     researcher = Researcher(
         id="researcher_munich",
         name="Elena Infra",
@@ -73,7 +73,7 @@ def test_munich_ml_systems_strong_or_moderate(backtrace) -> None:
         researcher,
         _report("researcher_munich", "Elena Infra"),
         [],
-        backtrace,
+        fund,
         papers_by_id={"paper_1": paper},
     )
     assert assessment.europe_nexus == "yes"
@@ -81,7 +81,7 @@ def test_munich_ml_systems_strong_or_moderate(backtrace) -> None:
     assert assessment.fit_level in (ThesisFitLevel.STRONG, ThesisFitLevel.MODERATE)
 
 
-def test_stanford_biotech_weak(backtrace) -> None:
+def test_stanford_biotech_weak(fund) -> None:
     researcher = Researcher(
         id="researcher_bio",
         name="Sam Bio",
@@ -104,13 +104,13 @@ def test_stanford_biotech_weak(backtrace) -> None:
         researcher,
         _report("researcher_bio", "Sam Bio"),
         signals,
-        backtrace,
+        fund,
     )
     assert assessment.europe_nexus == "no"
     assert assessment.fit_level == ThesisFitLevel.WEAK
 
 
-def test_backtrace_yaml_has_thesis_fit(backtrace) -> None:
-    assert backtrace.thesis_fit is not None
-    assert "Germany" in backtrace.thesis_fit.europe_regions
-    assert "MLOps" in "".join(backtrace.thesis_fit.infra_keywords)
+def test_default_yaml_has_thesis_fit(fund) -> None:
+    assert fund.thesis_fit is not None
+    assert "Germany" in fund.thesis_fit.europe_regions
+    assert "MLOps" in "".join(fund.thesis_fit.infra_keywords)
